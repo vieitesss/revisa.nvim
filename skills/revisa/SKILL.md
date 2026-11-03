@@ -23,16 +23,17 @@ way to read and change comments.
    Handle nil here
    ```
 
-   The header holds the id, the path from the repo root, the lines, the
-   side and the commit the comment was made on.
+   The header holds the id, the path from the repo root, the original
+   line range, the side and the commit the comment was made on.
 
 2. **Read the code.**
-   - `new` side: the lines are in the file as it is now in your worktree.
-   - `old` side: the lines are gone or changed. Read them with
+   - `new` side: inspect the file in your worktree. The original lines may
+     have moved or changed since the comment was made.
+   - `old` side: read the commented version with
      `git show <commit>:<path>`.
-   - A header ending in `outdated` has no line number: its lines changed
-     after the comment. The `was:` lines show the text it was on. Find
-     where that code went now.
+   - Revisa does not yet detect outdated comments. If you cannot find the
+     commented code, run `revisa list --status open --json` and use the
+     comment's `anchor_text` to locate it.
 
 3. **Fix.** Make the change the comment asks for, and check it the way you
    check any change in this repo (tests, lint).
