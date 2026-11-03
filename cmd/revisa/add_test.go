@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -166,6 +167,8 @@ func TestAddIDsAreUniqueAndOrdered(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("want 3 comments, got %d", len(got))
 	}
+	// IDs generated in the same millisecond have random ordering.
+	slices.Sort(ids)
 	for i, c := range got {
 		if len(ids[i]) != 26 || c["id"] != ids[i] {
 			t.Errorf("comment %d: id %v, added %v", i, c["id"], ids)
