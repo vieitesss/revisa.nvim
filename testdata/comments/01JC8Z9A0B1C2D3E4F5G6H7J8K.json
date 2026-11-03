@@ -1,0 +1,13 @@
+{
+  "id": "01JC8Z9A0B1C2D3E4F5G6H7J8K",
+  "branch": "feat/x",
+  "path": "src/b.lua",
+  "side": "old",
+  "line_start": 3,
+  "line_end": 3,
+  "anchor_text": "return cache[key]",
+  "commit": "def456",
+  "body": "Why was the cache removed?\nCallers still expect it.",
+  "status": "open",
+  "reply": null
+}

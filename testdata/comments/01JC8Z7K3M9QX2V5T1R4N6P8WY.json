@@ -1,0 +1,13 @@
+{
+  "id": "01JC8Z7K3M9QX2V5T1R4N6P8WY",
+  "branch": "feat/x",
+  "path": "src/a.lua",
+  "side": "new",
+  "line_start": 12,
+  "line_end": 14,
+  "anchor_text": "local x = y\nif x then\n  run(x)",
+  "commit": "abc123",
+  "body": "Handle nil here",
+  "status": "open",
+  "reply": null
+}
