@@ -67,16 +67,16 @@ func Show(dir, commit, path string) (string, error) {
 // WorktreeOf returns the root of the worktree where branch is checked
 // out, or "" when no worktree has it.
 func WorktreeOf(dir, branch string) (string, error) {
-	out, err := run(dir, "worktree", "list", "--porcelain")
+	out, err := run(dir, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return "", err
 	}
 	var path string
-	for line := range strings.SplitSeq(out, "\n") {
-		if p, ok := strings.CutPrefix(line, "worktree "); ok {
+	for field := range strings.SplitSeq(out, "\x00") {
+		if p, ok := strings.CutPrefix(field, "worktree "); ok {
 			path = p
 		}
-		if line == "branch refs/heads/"+branch {
+		if field == "branch refs/heads/"+branch {
 			return path, nil
 		}
 	}

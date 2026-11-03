@@ -111,6 +111,24 @@ func TestAddForAnotherWorktreesBranch(t *testing.T) {
 	}
 }
 
+func TestAddForWorktreeWithNewlineInPath(t *testing.T) {
+	p := normalClone(t)
+	worktree := filepath.Join(t.TempDir(), "line\nbreak")
+	if err := os.Mkdir(worktree, 0o755); err != nil {
+		t.Skipf("cannot create worktree path containing a newline: %v", err)
+	}
+	git(t, p.worktrees[0], "worktree", "add", "-q", "-b",
+		"feat/newline", worktree)
+	writeFile(t, worktree, "file.txt", "anchor\n")
+	id := addOK(t, p.worktrees[0], "--branch", "feat/newline",
+		"--path", "file.txt", "--lines", "1", "--body", "comment")
+	got := listJSON(t, p.worktrees[0], "--branch", "feat/newline")
+	if len(got) != 1 || got[0]["id"] != id ||
+		got[0]["anchor_text"] != "anchor" {
+		t.Errorf("got %v", got)
+	}
+}
+
 func TestAddOldSideReadsAnchorFromCommit(t *testing.T) {
 	p, head := reviewProject(t)
 	addOK(t, p.worktrees[1], "--side", "old", "--commit", "feat/x",
