@@ -29,7 +29,7 @@ func CommonDir(dir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("not inside a git repository: %w", err)
 	}
-	return strings.TrimSpace(out), nil
+	return strings.TrimSuffix(out, "\n"), nil
 }
 
 // CurrentBranch returns the branch checked out in dir, or "" on a

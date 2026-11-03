@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -232,5 +233,30 @@ func TestAddErrors(t *testing.T) {
 	}
 	if got := listJSON(t, linked); len(got) != 0 {
 		t.Errorf("failed adds stored %d comments", len(got))
+	}
+}
+
+func TestReposWhosePathsDifferByTrailingSpaceKeepSeparateStores(
+	t *testing.T) {
+	root := t.TempDir()
+	seed := filepath.Join(root, "seed")
+	git(t, root, "init", "-q", "-b", "main", seed)
+	writeFile(t, seed, "f", "anchor\n")
+	git(t, seed, "add", ".")
+	git(t, seed, "commit", "-q", "-m", "init")
+	var worktrees []string
+	for i, name := range []string{"repo.git", "repo.git "} {
+		bare := filepath.Join(root, name)
+		git(t, root, "clone", "-q", "--bare", seed, bare)
+		wt := filepath.Join(root, "wt"+strconv.Itoa(i))
+		git(t, bare, "worktree", "add", "-q", wt, "main")
+		worktrees = append(worktrees, wt)
+	}
+	addOK(t, worktrees[1], "--path", "f", "--lines", "1", "--body", "check")
+	if got := listJSON(t, worktrees[0]); len(got) != 0 {
+		t.Errorf("other repo sees %d comments", len(got))
+	}
+	if got := listJSON(t, worktrees[1]); len(got) != 1 {
+		t.Errorf("want 1 comment, got %d", len(got))
 	}
 }
