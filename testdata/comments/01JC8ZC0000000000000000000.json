@@ -1,0 +1,13 @@
+{
+  "id": "01JC8ZC0000000000000000000",
+  "branch": "feat/y",
+  "path": "main.go",
+  "side": "new",
+  "line_start": 7,
+  "line_end": 7,
+  "anchor_text": "os.Exit(2)",
+  "commit": "fed987",
+  "body": "Use exit code 1",
+  "status": "open",
+  "reply": null
+}

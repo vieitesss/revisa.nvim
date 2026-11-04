@@ -1,0 +1,13 @@
+{
+  "id": "01JC8ZB0000000000000000000",
+  "branch": "feat/x",
+  "path": "README.md",
+  "side": "new",
+  "line_start": 1,
+  "line_end": 2,
+  "anchor_text": "# revisa\nReview tool",
+  "commit": "abc123",
+  "body": "Typo in the title",
+  "status": "resolved",
+  "reply": "Fixed the title."
+}
