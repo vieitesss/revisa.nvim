@@ -1,5 +1,5 @@
-// Package store reads review comments kept one JSON file each in a revisa
-// directory under the git common directory, shared by every worktree.
+// Package store reads and writes review comments kept one JSON file each
+// in a directory.
 package store
 
 import (
@@ -10,8 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-
-	"github.com/vieitesss/revisa.nvim/internal/git"
 )
 
 // Comment is one reviewer remark, stored as <id>.json.
@@ -27,15 +25,6 @@ type Comment struct {
 	Body       string  `json:"body"`
 	Status     string  `json:"status"`
 	Reply      *string `json:"reply"`
-}
-
-// Dir returns the store directory of the project that contains dir.
-func Dir(dir string) (string, error) {
-	common, err := git.CommonDir(dir)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(common, "revisa"), nil
 }
 
 // Load reads every comment in the store, ordered by id. A missing store
@@ -96,11 +85,25 @@ func Get(storeDir, id string) (Comment, error) {
 	return c, nil
 }
 
+// ErrInvalidID reports a comment id that cannot name a stored file.
+var ErrInvalidID = errors.New("invalid comment id")
+
 // Save writes c as <id>.json, replacing it whole so a reader never sees
 // a partial file.
 func Save(storeDir string, c Comment) error {
+	return save(storeDir, c, false)
+}
+
+// SaveNew writes c only if its id does not exist. Publication is atomic:
+// readers see a whole comment and concurrent creates cannot overwrite it.
+// An existing id returns an error wrapping fs.ErrExist.
+func SaveNew(storeDir string, c Comment) error {
+	return save(storeDir, c, true)
+}
+
+func save(storeDir string, c Comment, exclusive bool) error {
 	if !validID(c.ID) {
-		return fmt.Errorf("invalid comment id %q", c.ID)
+		return fmt.Errorf("%w %q", ErrInvalidID, c.ID)
 	}
 	if err := os.MkdirAll(storeDir, 0o755); err != nil {
 		return err
@@ -121,5 +124,9 @@ func Save(storeDir string, c Comment) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), filepath.Join(storeDir, c.ID+".json"))
+	destination := filepath.Join(storeDir, c.ID+".json")
+	if exclusive {
+		return os.Link(tmp.Name(), destination)
+	}
+	return os.Rename(tmp.Name(), destination)
 }
