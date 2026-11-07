@@ -63,6 +63,18 @@ Done when `revisa list --status open` prints only the comments you
 asked the user about. Then tell the user which comments you resolved,
 with each reply, and which stay open and why.
 
+## Seeing the session changes
+
+`revisa changes --json` prints what the current worktree changed: its
+commits since the merge-base with the project's default branch,
+uncommitted edits, deletions, renames and untracked files. Add
+`--worktree PATH` or `--worktree BRANCH` to read another worktree, and
+`revisa worktrees` to list them. Each entry has a `status` (`M`, `A`,
+`D`, `R`, or `?` for an untracked file), a `path`, and `old_path` after a
+rename. Use it to see the whole change under review.
+
+Never run `revisa review`: it starts an editor.
+
 ## Outside git
 
 A directory outside git has no branch and no old side:

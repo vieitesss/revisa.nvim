@@ -62,6 +62,10 @@ function M.comment(first, last)
     end)
 end
 
+function M.review(worktree)
+    require("revisa.review").review(worktree)
+end
+
 function M.setup()
 end
 

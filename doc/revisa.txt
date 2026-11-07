@@ -9,6 +9,7 @@ CONTENTS                                                    *revisa-contents*
     Mappings            |revisa-mappings|
     Display             |revisa-display|
     Projects            |revisa-projects|
+    Session changes     |revisa-changes|
     Setup               |revisa-setup|
 
 ==============================================================================
@@ -19,6 +20,8 @@ Neovim 0.10 or newer. No other plugins are required.
 The plugin uses the revisa CLI. It looks for an executable named revisa on PATH,
 then for bin/revisa inside the plugin directory. If neither exists, an error
 names both locations. The CLI is the only code that reads or writes comments.
+
+The worktree picker uses |vim.ui.select|. It needs no picker plugin.
 
 ==============================================================================
 COMMANDS                                                      *revisa-commands*
@@ -46,6 +49,38 @@ COMMANDS                                                      *revisa-commands*
     marks. They are hidden by default. A shown resolved comment prints its
     reply below its body, so you can judge the fix. From Lua, the same
     toggle is require("revisa").toggle_resolved().
+
+:Revisa review [WORKTREE]                                     *:Revisa-review*
+    List the session changes of a worktree. Without [WORKTREE], pick one
+    with |vim.ui.select|, labelled with its branch and path. [WORKTREE] is
+    a worktree path or a branch; it skips the picker and works from any
+    worktree of the project.
+
+    The list opens in a new split, in a scratch buffer named
+    revisa://changes/<branch>. Its header shows the worktree path, the
+    branch and the base: the merge-base with the project's default branch,
+    or the worktree's HEAD when it is on that branch. Each entry is one
+    line, a status then a path, with old -> new after a rename: >
+
+        worktree /repo/linked
+        branch feat/x
+        base 3f9c2e1 (main)
+
+        M src/a.lua
+        ? notes.txt
+        R src/old.lua -> src/new.lua
+<
+    Status is M, A, D, R, or ? for a file git does not track yet.
+
+    <CR>        Open the file in that worktree, in the previous window.
+                Comments on it appear as on any other real file buffer. A
+                deleted entry is reported instead of opening a path that is
+                not there.
+    R           Reload the list from the CLI.
+    q           Close the list.
+
+    The keys are buffer-local. require("revisa").review(worktree) does the
+    same as the command.
 
 Comments also refresh on BufReadPost of real file buffers and after a successful
 add. Switching to an already loaded buffer does not refresh comments.
@@ -84,7 +119,9 @@ There are no default keymaps. Example user mappings: >
 
     vim.keymap.set("n", "<leader>rc", "<Plug>(revisa-comment)")
     vim.keymap.set("x", "<leader>rc", "<Plug>(revisa-comment)")
+    vim.keymap.set("n", "<leader>rr", "<cmd>Revisa review<cr>")
 <
+The changes buffer adds its own buffer-local <CR>, R and q keys.
 ==============================================================================
 DISPLAY                                                        *revisa-display*
 
@@ -122,6 +159,35 @@ is under it, otherwise in the file's own directory. The project root is the
 nearest ancestor of that run directory containing a .revisa/ directory, or the
 run directory itself when no store exists. Comment paths are relative to that
 root. The plugin never creates or opens the store directly.
+
+==============================================================================
+SESSION CHANGES                                                *revisa-changes*
+
+Session changes are everything that differs between a worktree and the base:
+its commits since it left the default branch, uncommitted edits to tracked
+files, deletions, renames, and files git does not track yet.
+
+:Revisa review reads them through the CLI, so the same data is available
+there. The shell command opens Neovim straight in the review, keeping the
+working directory: >
+
+    revisa review             pick a worktree
+    revisa review feat/x      a branch, or a worktree path
+    revisa review ../linked
+<
+REVISA_NVIM chooses the editor executable instead of nvim.
+
+The CLI prints the same data for scripts and agents: >
+
+    revisa worktrees [--json]
+    revisa changes [--worktree PATH|BRANCH] [--json]
+<
+The default branch is refs/remotes/origin/HEAD, then init.defaultBranch,
+then main, then master. If none of them exists, changes fails and names
+what it tried.
+
+On the default branch the base is HEAD, so only uncommitted work is listed:
+sessions commit to their own branch.
 
 ==============================================================================
 SETUP                                                            *revisa-setup*

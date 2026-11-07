@@ -54,3 +54,39 @@ Install prints one stdout line for each new or already-present link.
 Running it twice is safe: matching links stay unchanged. It never replaces
 an unrelated file, directory, or symlink. A failure names the path involved
 and exits with code `1`; invalid arguments exit with code `2`.
+
+## Review a worktree
+
+From a shell in the project, `revisa review` opens Neovim in the worktree
+picker, and `revisa review <worktree>` opens one worktree directly. A
+worktree is a path or a branch. The working directory is kept, and
+`$REVISA_NVIM` chooses another Neovim executable.
+
+Inside Neovim, `:Revisa review [WORKTREE]` does the same. Without a
+worktree it uses `vim.ui.select` over the project's worktrees, so no
+picker plugin is needed.
+
+The list shows that worktree's commits since the merge-base with the
+project's default branch, plus uncommitted changes and untracked files.
+On the default branch it shows only the uncommitted work, because
+sessions do not commit there.
+
+| Key    | Action                                               |
+| ------ | ---------------------------------------------------- |
+| `<CR>` | Open the file in that worktree, in the previous window |
+| `R`    | Reload the list from the CLI                          |
+| `q`    | Close the list                                        |
+
+Comments on the opened file appear as usual.
+
+The CLI exposes the same data for scripts and agents:
+
+```sh
+revisa worktrees [--json]
+revisa changes [--worktree PATH|BRANCH] [--json]
+```
+
+`changes` prints a header line, `worktree <path> <branch> base <sha>
+(<default branch>)`, then one `STATUS path` line per entry, with
+`old -> new` after a rename. Status is `M`, `A`, `D`, `R` or `?` for an
+untracked file.

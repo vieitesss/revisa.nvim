@@ -28,6 +28,9 @@ commands:
   prune     delete resolved comments (--branch)
   migrate   move .revisa/ comments into the git store (--branch)
   install   link the CLI and agent skill (--bin-dir)
+  worktrees list the project's worktrees (--json)
+  changes   list a worktree's session changes (--worktree, --json)
+  review    open Neovim in the worktree picker
 
 exit codes:
   0  success
@@ -66,6 +69,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 		err = migrate(args[1:], stdout, stderr)
 	case "install":
 		err = install(args[1:], stdout, stderr)
+	case "worktrees":
+		err = worktrees(args[1:], stdout, stderr)
+	case "changes":
+		err = changes(args[1:], stdout, stderr)
+	case "review":
+		err = review(args[1:], stdout, stderr)
 	case "-h", "--help", "help":
 		fmt.Fprint(stdout, usage)
 	default:
