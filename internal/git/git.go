@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -95,20 +96,39 @@ func Show(dir, commit, path string) (string, error) {
 }
 
 // WorktreeOf returns the root of the worktree where branch is checked
-// out, or "" when no worktree has it.
+// out, or "" when no worktree has it. It prefers the worktree containing
+// dir, otherwise returning the first match in git's worktree list.
 func WorktreeOf(dir, branch string) (string, error) {
 	out, err := run(dir, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return "", err
 	}
-	var path string
+	root, err := TopLevel(dir)
+	if err != nil {
+		return "", err
+	}
+	if root != "" {
+		root, err = filepath.EvalSymlinks(root)
+		if err != nil {
+			return "", err
+		}
+	}
+	var path, first string
 	for field := range strings.SplitSeq(out, "\x00") {
 		if p, ok := strings.CutPrefix(field, "worktree "); ok {
 			path = p
 		}
 		if field == "branch refs/heads/"+branch {
-			return path, nil
+			if first == "" {
+				first = path
+			}
+			if root != "" {
+				resolved, err := filepath.EvalSymlinks(path)
+				if err == nil && resolved == root {
+					return path, nil
+				}
+			}
 		}
 	}
-	return "", nil
+	return first, nil
 }

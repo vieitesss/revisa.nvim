@@ -56,6 +56,35 @@ func TestAddNewSideReadsAnchorFromWorktree(t *testing.T) {
 	}
 }
 
+func TestAddNewSidePrefersInvokingWorktreeOfSameBranch(t *testing.T) {
+	for _, kind := range []string{"direct", "symlinked parent"} {
+		t.Run(kind, func(t *testing.T) {
+			p, _ := reviewProject(t)
+			first := p.worktrees[1]
+			root := t.TempDir()
+			if kind == "symlinked parent" {
+				link := filepath.Join(t.TempDir(), "linked parent")
+				if err := os.Symlink(root, link); err != nil {
+					t.Fatal(err)
+				}
+				root = link
+			}
+			second := filepath.Join(root, "second")
+			git(t, first, "worktree", "add", "-q", "--force",
+				second, "feat/x")
+			writeFile(t, first, "src/a.lua", "one\nFIRST WORKTREE TEXT\n")
+			writeFile(t, second, "src/a.lua", "one\nSECOND WORKTREE TEXT\n")
+			id := addOK(t, second, "--path", "src/a.lua", "--lines", "2",
+				"--body", "Use this worktree")
+			got := listJSON(t, second)
+			if len(got) != 1 || got[0]["id"] != id ||
+				got[0]["anchor_text"] != "SECOND WORKTREE TEXT" {
+				t.Errorf("wrong invoking-worktree anchor text: %v", got)
+			}
+		})
+	}
+}
+
 func TestListPrintsShortCommit(t *testing.T) {
 	p, head := reviewProject(t)
 	id := addOK(t, p.worktrees[1],
