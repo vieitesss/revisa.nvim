@@ -1,0 +1,16 @@
+local buf = H.open()
+H.equal({}, H.marks(buf))
+local id = H.cli({
+    "add", "--path", "src/a.lua", "--lines", "2", "--body", "External",
+})
+H.equal({}, H.marks(buf))
+vim.cmd("Revisa refresh")
+H.display(buf, 2, 2, { "External" })
+vim.cmd("Revisa refresh")
+H.display(buf, 2, 2, { "External" })
+H.cli({ "resolve", id, "--reply", "Fixed" })
+vim.cmd("enew")
+vim.cmd.buffer(buf)
+H.display(buf, 2, 2, { "External" })
+vim.cmd("Revisa refresh")
+H.equal({}, H.marks(buf))

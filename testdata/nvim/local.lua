@@ -1,0 +1,6 @@
+local buf, win = H.open()
+vim.cmd("2Revisa comment")
+local editor = H.reserved(buf, win, 2)
+vim.api.nvim_buf_set_lines(editor, 0, -1, false, { "Plain file" })
+vim.cmd("write")
+H.display(buf, 2, 2, { "Plain file" })

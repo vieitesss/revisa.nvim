@@ -1,0 +1,375 @@
+package main_test
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+// headless runs the real plugin and binary without a user configuration.
+func headless(t *testing.T, dir, script string, env ...string) {
+	t.Helper()
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nvim, err := exec.LookPath("nvim")
+	if err != nil {
+		t.Fatal("headless plugin tests require Neovim 0.10+ on PATH")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, nvim, "--headless", "--clean",
+		"--cmd", "lua vim.opt.rtp:prepend(vim.env.REVISA_PLUGIN)",
+		"--cmd", "set loadplugins",
+		"-c", "lua vim.schedule(function() "+
+			"dofile(vim.env.REVISA_RUNNER) end)")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"PATH="+filepath.Dir(revisa)+string(os.PathListSeparator)+
+			os.Getenv("PATH"),
+		"REVISA_PLUGIN="+root,
+		"REVISA_RUNNER="+filepath.Join(root, "testdata/nvim/run.lua"),
+		"REVISA_HELPERS="+filepath.Join(root, "testdata/nvim/helpers.lua"),
+		"REVISA_SCRIPT="+filepath.Join(root, "testdata/nvim", script))
+	cmd.Env = append(cmd.Env, env...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("headless Neovim: %v\n%s", err, out)
+	}
+}
+
+func TestBufferPluginEntryPointsHighlightsAndHelp(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	root := t.TempDir()
+	writeFile(t, root, "doc/revisa.txt", readFile(t, "../../doc/revisa.txt"))
+	headless(t, linked, "plugin.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+		"REVISA_HELP_ROOT="+root)
+}
+
+func TestBufferFloatDoesNotCoverExistingComment(t *testing.T) {
+	for _, kind := range []string{"text line", "blank line at EOF"} {
+		t.Run(kind, func(t *testing.T) {
+			p, _ := reviewProject(t)
+			linked := p.worktrees[1]
+			line := "2"
+			if kind == "blank line at EOF" {
+				writeFile(t, linked, "src/a.lua", "one\ntwo\n\n")
+				line = "3"
+			}
+			addOK(t, linked, "--path", "src/a.lua", "--lines", line,
+				"--body", "Existing body\nSecond line")
+			headless(t, linked, "existing.lua",
+				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+				"REVISA_LINE="+line)
+			if got := listJSON(t, linked); len(got) != 1 {
+				t.Errorf("cancel stored another comment: %v", got)
+			}
+		})
+	}
+}
+
+func TestBufferClosingFloatRemovesPadding(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	headless(t, linked, "close.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+	if got := listJSON(t, linked); len(got) != 0 {
+		t.Errorf("closing draft stored comments: %v", got)
+	}
+}
+
+func TestBufferBinaryFallbackAndMissingError(t *testing.T) {
+	gitBinary, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"fallback", "missing"} {
+		t.Run(kind, func(t *testing.T) {
+			p, _ := reviewProject(t)
+			linked := p.worktrees[1]
+			root := t.TempDir()
+			for _, dir := range []string{"lua", "plugin"} {
+				err := filepath.WalkDir("../../"+dir,
+					func(path string, entry os.DirEntry, err error) error {
+						if err != nil || entry.IsDir() {
+							return err
+						}
+						relative, err := filepath.Rel("../..", path)
+						if err != nil {
+							return err
+						}
+						writeFile(t, root, relative, readFile(t, path))
+						return nil
+					})
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if kind == "fallback" {
+				binary := filepath.Join(root, "bin/revisa")
+				writeFile(t, root, "bin/revisa", readFile(t, revisa))
+				if err := os.Chmod(binary, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			headless(t, linked, "binary.lua",
+				"REVISA_PLUGIN="+root,
+				"PATH="+filepath.Dir(gitBinary),
+				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+				"REVISA_CASE="+kind)
+			got := listJSON(t, linked)
+			if kind == "missing" && len(got) != 0 {
+				t.Errorf("missing binary stored comments: %v", got)
+			}
+			if kind == "fallback" &&
+				(len(got) != 1 || got[0]["body"] != "Fallback binary") {
+				t.Errorf("fallback did not store the comment: %v", got)
+			}
+		})
+	}
+}
+
+func TestBufferCommentOutsideGitUsesProjectRoot(t *testing.T) {
+	for _, kind := range []string{
+		"under pwd", "elsewhere", "ancestor store", "nearest store",
+		"sibling prefix", "root store",
+	} {
+		t.Run(kind, func(t *testing.T) {
+			base := t.TempDir()
+			root := filepath.Join(base, "project")
+			dir := root
+			file := "deep/file.txt"
+			runDir := root
+			if err := os.MkdirAll(root, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "elsewhere", "sibling prefix":
+				name := "elsewhere"
+				if kind == "sibling prefix" {
+					name = "project-other"
+				}
+				root = filepath.Join(base, name)
+				file = "file.txt"
+				runDir = root
+			case "ancestor store", "nearest store":
+				if err := os.MkdirAll(filepath.Join(root, ".revisa"),
+					0o755); err != nil {
+					t.Fatal(err)
+				}
+				dir = filepath.Join(root, "deep")
+				runDir = dir
+				if kind == "nearest store" {
+					root = dir
+					file = "file.txt"
+					if err := os.MkdirAll(filepath.Join(root, ".revisa"),
+						0o755); err != nil {
+						t.Fatal(err)
+					}
+				}
+			case "root store":
+				if err := os.MkdirAll(filepath.Join(root, ".revisa"),
+					0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			writeFile(t, root, file, "one\ntwo\nthree\n")
+			headless(t, dir, "local.lua",
+				"REVISA_FILE="+filepath.Join(root, file))
+			got := listJSON(t, runDir)
+			if len(got) != 1 {
+				t.Fatalf("want 1 comment, got %v", got)
+			}
+			for field, value := range map[string]any{
+				"path": file, "branch": "", "side": "new",
+				"anchor_text": "two", "line_start": 2.0,
+				"line_end": 2.0, "body": "Plain file",
+			} {
+				if got[0][field] != value {
+					t.Errorf("%s: got %#v, want %#v",
+						field, got[0][field], value)
+				}
+			}
+		})
+	}
+}
+
+func TestBufferFloatSpaceInScrolledAndDiffWindows(t *testing.T) {
+	for _, kind := range []string{
+		"bottom", "wrapped", "long wrap", "diff", "scroll",
+	} {
+		t.Run(kind, func(t *testing.T) {
+			p, _ := reviewProject(t)
+			linked := p.worktrees[1]
+			content := strings.Repeat("a line of text\n", 100)
+			if kind == "wrapped" || kind == "long wrap" {
+				repetitions := 30
+				if kind == "long wrap" {
+					repetitions = 300
+				}
+				content += "last " +
+					strings.Repeat("wrapped text ", repetitions) + "\n"
+			}
+			writeFile(t, linked, "long.txt", content)
+			headless(t, linked, "geometry.lua",
+				"REVISA_FILE="+filepath.Join(linked, "long.txt"),
+				"REVISA_CASE="+kind)
+			got := listJSON(t, linked)
+			if kind == "diff" {
+				if len(got) != 1 || got[0]["side"] != "new" ||
+					got[0]["anchor_text"] !=
+						"a line of text\na line of text" {
+					t.Errorf("wrong diff-buffer comment: %v", got)
+				}
+			} else if len(got) != 0 {
+				t.Errorf("cancel stored comments: %v", got)
+			}
+		})
+	}
+}
+
+func TestBufferRefusesNonFilesAndModifiedBuffers(t *testing.T) {
+	for _, kind := range []string{
+		"virtual", "patch", "scheme", "missing", "unnamed",
+		"directory", "modified",
+	} {
+		t.Run(kind, func(t *testing.T) {
+			p, _ := reviewProject(t)
+			linked := p.worktrees[1]
+			headless(t, linked, "refuse.lua",
+				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+				"REVISA_CASE="+kind)
+			if got := listJSON(t, linked); len(got) != 0 {
+				t.Errorf("refused buffer stored comments: %v", got)
+			}
+		})
+	}
+}
+
+func TestBufferFailedSaveKeepsDraftForRetry(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	headless(t, linked, "retry.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+		"REVISA_WORKTREE="+linked)
+	got := listJSON(t, linked)
+	if len(got) != 1 || got[0]["body"] != "Retry this body" {
+		t.Errorf("want one retried comment, got %v", got)
+	}
+}
+
+func TestBufferCommentVisibleInAnotherWorktreeOfSameBranch(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	other := filepath.Join(t.TempDir(), "same branch")
+	git(t, linked, "worktree", "add", "-q", "--force", other, "feat/x")
+	writeFile(t, other, "src/a.lua", editedLua)
+	headless(t, p.worktrees[0], "line.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+	headless(t, p.worktrees[0], "same-branch.lua",
+		"REVISA_FILE="+filepath.Join(other, "src/a.lua"))
+}
+
+func TestBufferExplicitRefreshAndNoBufEnterRefresh(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	headless(t, p.worktrees[0], "refresh.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+		"REVISA_WORKTREE="+linked)
+}
+
+func TestBufferPlugsAndFloatKeys(t *testing.T) {
+	for _, mode := range []string{"normal", "visual"} {
+		t.Run(mode, func(t *testing.T) {
+			p, _ := reviewProject(t)
+			linked := p.worktrees[1]
+			headless(t, linked, "keys.lua",
+				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+				"REVISA_MODE="+mode)
+			got := listJSON(t, linked)
+			if len(got) != 1 || got[0]["body"] != "Saved with Ctrl-s" {
+				t.Fatalf("want one saved comment, got %v", got)
+			}
+			end := 2.0
+			anchor := "local x = y"
+			if mode == "visual" {
+				end = 4
+				anchor += "\nif x then\n  run(x)"
+			}
+			if got[0]["line_start"] != 2.0 ||
+				got[0]["line_end"] != end ||
+				got[0]["anchor_text"] != anchor {
+				t.Errorf("wrong range: %v", got[0])
+			}
+		})
+	}
+}
+
+func TestBufferOpenCommentsAppearOnRead(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "2-4",
+		"--body", "Handle nil\nAll three lines.")
+	resolved := addOK(t, linked, "--path", "src/a.lua", "--lines", "1",
+		"--body", "Resolved")
+	_, stderr, code := run(t, linked,
+		"resolve", resolved, "--reply", "Fixed")
+	if code != 0 {
+		t.Fatal(stderr)
+	}
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "1",
+		"--side", "old", "--commit", "HEAD", "--body", "Old side")
+	writeFile(t, linked, "other.lua", "other\n")
+	addOK(t, linked, "--path", "other.lua", "--lines", "1",
+		"--body", "Other file")
+	headless(t, p.worktrees[0], "display.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+}
+
+func TestBufferCommentOnRangeReservesSpace(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	headless(t, p.worktrees[0], "range.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+	got := listJSON(t, linked)
+	if len(got) != 1 {
+		t.Fatalf("want 1 comment, got %v", got)
+	}
+	for field, value := range map[string]any{
+		"side": "new", "line_start": 2.0, "line_end": 4.0,
+		"anchor_text": "local x = y\nif x then\n  run(x)",
+		"body":        "Range comment",
+	} {
+		if got[0][field] != value {
+			t.Errorf("%s: got %#v, want %#v", field, got[0][field], value)
+		}
+	}
+}
+
+func TestBufferCommentOnLine(t *testing.T) {
+	p, head := reviewProject(t)
+	linked := p.worktrees[1]
+	headless(t, p.worktrees[0], "line.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+	got := listJSON(t, linked)
+	if len(got) != 1 {
+		t.Fatalf("want 1 comment, got %v", got)
+	}
+	want := map[string]any{
+		"path": "src/a.lua", "branch": "feat/x", "side": "new",
+		"line_start": 2.0, "line_end": 2.0,
+		"anchor_text": "local x = y", "commit": head,
+		"body": "Handle nil\nKeep the context.", "status": "open",
+	}
+	for field, value := range want {
+		if got[0][field] != value {
+			t.Errorf("%s: got %#v, want %#v", field, got[0][field], value)
+		}
+	}
+}
