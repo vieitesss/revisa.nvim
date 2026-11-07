@@ -322,6 +322,18 @@ func TestBufferPlugsAndFloatKeys(t *testing.T) {
 	}
 }
 
+func TestBufferResolvedCommentsHiddenUntilToggled(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	writeFile(t, linked, "src/b.lua", "other body\n")
+	headless(t, linked, "resolved.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+		"REVISA_OTHER="+filepath.Join(linked, "src/b.lua"))
+	if got := listJSON(t, linked, "--status", "resolved"); len(got) != 2 {
+		t.Errorf("want 2 resolved comments left, got %v", got)
+	}
+}
+
 func TestBufferOpenCommentsAppearOnRead(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]

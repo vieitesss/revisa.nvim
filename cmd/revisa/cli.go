@@ -25,6 +25,7 @@ commands:
   list (ls) print the current branch's comments (--branch, --status)
   add       comment on lines of a file
   resolve   resolve a comment with a reply
+  prune     delete resolved comments (--branch)
   migrate   move .revisa/ comments into the git store (--branch)
   install   link the CLI and agent skill (--bin-dir)
 
@@ -59,6 +60,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		err = add(args[1:], stdout, stderr)
 	case "resolve":
 		err = resolve(args[1:], stdout, stderr)
+	case "prune":
+		err = prune(args[1:], stdout, stderr)
 	case "migrate":
 		err = migrate(args[1:], stdout, stderr)
 	case "install":

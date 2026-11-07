@@ -74,6 +74,33 @@ function H.display(buf, first, last, body)
     H.equal({ { last, body } }, bodies)
 end
 
+function H.resolved(buf, first, last, lines)
+    local signs, bodies = {}, {}
+    for _, mark in ipairs(H.marks(buf)) do
+        local details = mark[4]
+        if details.sign_text then
+            H.equal("✓", vim.trim(details.sign_text))
+            H.equal("RevisaResolved", details.sign_hl_group)
+            signs[#signs + 1] = mark[2] + 1
+        end
+        if details.virt_lines then
+            local text = {}
+            for _, line in ipairs(details.virt_lines) do
+                text[#text + 1] = { line[1][1], line[1][2] }
+            end
+            local at = mark[2] + (details.virt_lines_above and 0 or 1)
+            bodies[#bodies + 1] = { at, text }
+        end
+    end
+    table.sort(signs)
+    local expected = {}
+    for line = first, last do
+        expected[#expected + 1] = line
+    end
+    H.equal(expected, signs)
+    H.equal({ { last, lines } }, bodies)
+end
+
 function H.padding(buf)
     for _, mark in ipairs(H.marks(buf)) do
         local lines = mark[4].virt_lines

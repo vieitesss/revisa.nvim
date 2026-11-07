@@ -8,20 +8,27 @@ api.nvim_set_hl(0, "RevisaSign", {
     link = "DiagnosticSignInfo", default = true,
 })
 api.nvim_set_hl(0, "RevisaComment", { link = "Comment", default = true })
+api.nvim_set_hl(0, "RevisaResolved", {
+    link = "DiagnosticSignOk", default = true,
+})
+api.nvim_set_hl(0, "RevisaReply", { link = "DiagnosticOk", default = true })
 
 api.nvim_create_user_command("Revisa", function(command)
     if command.args == "comment" then
         require("revisa").comment(command.line1, command.line2)
     elseif command.args == "refresh" then
         require("revisa").refresh()
+    elseif command.args == "resolved" then
+        require("revisa").toggle_resolved()
     else
-        require("revisa.cli").error("revisa: use comment or refresh")
+        require("revisa.cli").error(
+            "revisa: use comment, refresh or resolved")
     end
 end, {
     nargs = 1,
     range = true,
     complete = function()
-        return { "comment", "refresh" }
+        return { "comment", "refresh", "resolved" }
     end,
 })
 

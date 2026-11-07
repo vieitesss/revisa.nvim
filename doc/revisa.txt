@@ -39,7 +39,13 @@ COMMANDS                                                      *revisa-commands*
     comment. Another diff tool's real file buffer works without an adapter.
 
 :Revisa refresh                                               *:Revisa-refresh*
-    Reload open comments for the current file.
+    Reload comments for the current file.
+
+:Revisa resolved                                             *:Revisa-resolved*
+    Show or hide resolved comments, in every loaded buffer that has revisa
+    marks. They are hidden by default. A shown resolved comment prints its
+    reply below its body, so you can judge the fix. From Lua, the same
+    toggle is require("revisa").toggle_resolved().
 
 Comments also refresh on BufReadPost of real file buffers and after a successful
 add. Switching to an already loaded buffer does not refresh comments.
@@ -86,12 +92,20 @@ Open new-side comments for the file appear inline:
     - A > sign on every line of the comment's range.
     - The full body as virtual lines below the last line.
 
-Resolved comments and old-side comments are not displayed by this feature.
+Resolved new-side comments are hidden by default. With :Revisa resolved they
+appear inline too:
+    - A ✓ sign on every line of the comment's range.
+    - The full body, then the reply, as virtual lines below the last line.
+      The first reply line starts with "reply: ".
+
+Old-side comments are not displayed by this feature.
 
 Highlight groups use default links, which users can override:
 
     RevisaSign          DiagnosticSignInfo                       *RevisaSign*
     RevisaComment       Comment                                  *RevisaComment*
+    RevisaResolved      DiagnosticSignOk                     *RevisaResolved*
+    RevisaReply         DiagnosticOk                            *RevisaReply*
 
 ==============================================================================
 PROJECTS                                                      *revisa-projects*

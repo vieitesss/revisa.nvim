@@ -10,15 +10,22 @@ end
 
 api.nvim_set_hl(0, "RevisaSign", { link = "Error" })
 api.nvim_set_hl(0, "RevisaComment", { link = "String" })
+api.nvim_set_hl(0, "RevisaResolved", { link = "WarningMsg" })
+api.nvim_set_hl(0, "RevisaReply", { link = "Title" })
 vim.g.loaded_revisa = nil
 vim.cmd("runtime plugin/revisa.lua")
 H.equal("Error", api.nvim_get_hl(0, { name = "RevisaSign" }).link)
 H.equal("String", api.nvim_get_hl(0, { name = "RevisaComment" }).link)
+H.equal("WarningMsg",
+    api.nvim_get_hl(0, { name = "RevisaResolved" }).link)
+H.equal("Title", api.nvim_get_hl(0, { name = "RevisaReply" }).link)
 
 local messages = H.notifications()
 vim.cmd("Revisa unknown")
-H.error(messages, "use comment or refresh")
+H.error(messages, "use comment, refresh or resolved")
 vim.opt.rtp:prepend(vim.env.REVISA_HELP_ROOT)
 vim.cmd.helptags(vim.fn.fnameescape(vim.env.REVISA_HELP_ROOT .. "/doc"))
 vim.cmd("help :Revisa-comment")
+H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))
+vim.cmd("help :Revisa-resolved")
 H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))

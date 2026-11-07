@@ -217,7 +217,9 @@ func TestHelpShowsExitCodes(t *testing.T) {
 }
 
 func TestCommandHelpExitsSuccessfully(t *testing.T) {
-	for _, command := range []string{"list", "add", "resolve", "migrate"} {
+	for _, command := range []string{
+		"list", "add", "resolve", "prune", "migrate",
+	} {
 		for _, flag := range []string{"--help", "-h"} {
 			t.Run(command+"/"+flag, func(t *testing.T) {
 				stdout, stderr, code := run(t, t.TempDir(), command, flag)
@@ -240,6 +242,7 @@ func TestFlagUsageExitCodes(t *testing.T) {
 		{"list", "--branch"},
 		{"add", "--path"},
 		{"resolve", "--reply"},
+		{"prune", "--branch"},
 		{"migrate", "--branch"},
 		{"ls", "--branch"},
 	}

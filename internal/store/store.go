@@ -88,6 +88,19 @@ func Get(storeDir, id string) (Comment, error) {
 // ErrInvalidID reports a comment id that cannot name a stored file.
 var ErrInvalidID = errors.New("invalid comment id")
 
+// Delete removes the comment with the given id. A comment another writer
+// already deleted is not an error.
+func Delete(storeDir, id string) error {
+	if !validID(id) {
+		return fmt.Errorf("%w %q", ErrInvalidID, id)
+	}
+	err := os.Remove(filepath.Join(storeDir, id+".json"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
 // Save writes c as <id>.json, replacing it whole so a reader never sees
 // a partial file.
 func Save(storeDir string, c Comment) error {

@@ -2,6 +2,9 @@ local M = {}
 local api = vim.api
 local buffer = require("revisa.buffer")
 local cli = require("revisa.cli")
+local display = require("revisa.display")
+
+local show_resolved = false
 
 function M.refresh(buf)
     buf = buf or api.nvim_get_current_buf()
@@ -10,7 +13,7 @@ function M.refresh(buf)
         cli.error(err)
         return
     end
-    local output = cli.run(context, { "list", "--status", "open", "--json" })
+    local output = cli.run(context, { "list", "--json" })
     if not output then
         return
     end
@@ -19,7 +22,16 @@ function M.refresh(buf)
         cli.error("revisa: invalid JSON from CLI: " .. tostring(comments))
         return
     end
-    require("revisa.display").draw(buf, context.path, comments)
+    display.draw(buf, context.path, comments, show_resolved)
+end
+
+-- toggle_resolved shows or hides resolved comments in every loaded buffer
+-- that has revisa marks.
+function M.toggle_resolved()
+    show_resolved = not show_resolved
+    for _, buf in ipairs(display.buffers()) do
+        M.refresh(buf)
+    end
 end
 
 function M.comment(first, last)

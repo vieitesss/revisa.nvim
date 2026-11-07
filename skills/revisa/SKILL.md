@@ -56,7 +56,8 @@ authority for its commands: `revisa --help` lists them.
    The reply is the one answer the reviewer reads: say what changed and
    where, in a sentence or two. Resolve each comment once, after its fix
    is done. If `resolve` reports the comment is already resolved, it is
-   done: do not retry, and there is no way to change the reply.
+   done: do not retry, and there is no way to change the reply. Never run
+   `revisa prune`: it deletes the reviewer's resolved comments.
 
 Done when `revisa list --status open` prints only the comments you
 asked the user about. Then tell the user which comments you resolved,
