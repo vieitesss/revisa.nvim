@@ -26,6 +26,7 @@ commands:
   add       comment on lines of a file
   resolve   resolve a comment with a reply
   migrate   move .revisa/ comments into the git store (--branch)
+  install   link the CLI and agent skill (--bin-dir)
 
 exit codes:
   0  success
@@ -60,6 +61,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		err = resolve(args[1:], stdout, stderr)
 	case "migrate":
 		err = migrate(args[1:], stdout, stderr)
+	case "install":
+		err = install(args[1:], stdout, stderr)
 	case "-h", "--help", "help":
 		fmt.Fprint(stdout, usage)
 	default:
