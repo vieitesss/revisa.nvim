@@ -9,4 +9,4 @@ Inside a git repository, comments live in `<git common dir>/revisa/`. A `.revisa
 
 ## Consequences
 
-When a directory holding `.revisa/` becomes part of a git repository, revisa moves those comments into the git store automatically, stamped with the current branch.
+When a directory holding `.revisa/` becomes part of a git repository, `revisa list` warns that those comments are still there. `revisa migrate` moves them into the git store, stamped with the current branch or the one `--branch` names. Nothing moves them automatically.
