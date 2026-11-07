@@ -66,7 +66,12 @@ function M.review(worktree)
     require("revisa.review").review(worktree)
 end
 
-function M.setup()
+function M.send(worktree)
+    require("revisa.send").send(worktree)
+end
+
+function M.setup(options)
+    require("revisa.send").setup(options or {})
 end
 
 return M

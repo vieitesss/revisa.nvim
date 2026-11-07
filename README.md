@@ -101,3 +101,27 @@ revisa changes [--worktree PATH|BRANCH] [--json]
 (<default branch>)`, then one `STATUS path` line per entry, with
 `old -> new` after a rename. Status is `M`, `A`, `D`, `R` or `?` for an
 untracked file.
+
+## Tell the agent that comments are waiting
+
+Agents can always pull comments with `revisa list`, so notification is
+optional. To send one through Recado, turn it on once:
+
+```lua
+require("revisa").setup({ notify = "recado" })
+```
+
+`recado` must be on `PATH`, and `:Revisa send [WORKTREE]` then asks you
+which live agent to message and sends it after you confirm. Without a
+worktree it uses the changes buffer's, the diff view's, or the current
+file's. Remote agents and Codex are not offered, since they cannot
+receive these messages. The one agent working in that worktree is
+offered first, marked as the match; anything else, or several matches,
+leaves the choice to you.
+
+The message carries no comment content, only where to read it: run
+`revisa list --branch '<branch>' --status open` and answer each comment
+with `revisa resolve`, not `recado reply`. Revisa reads no recado inbox
+and registers no agent. A successful send prints `revisa: sent to <id>`
+and returns; a failure prints recado's error; exit code `2` reopens the
+picker. The `notify` setting is `"none"` by default.

@@ -15,7 +15,7 @@ api.nvim_set_hl(0, "RevisaReply", { link = "DiagnosticOk", default = true })
 
 api.nvim_create_user_command("Revisa", function(command)
     local name, rest = command.args:match("^(%S+)%s*(.*)$")
-    if name ~= "review" and rest ~= "" then
+    if name ~= "review" and name ~= "send" and rest ~= "" then
         require("revisa.cli").error(
             "revisa: " .. name .. " takes no argument")
         return
@@ -28,15 +28,17 @@ api.nvim_create_user_command("Revisa", function(command)
         require("revisa").toggle_resolved()
     elseif name == "review" then
         require("revisa").review(rest)
+    elseif name == "send" then
+        require("revisa").send(rest)
     else
         require("revisa.cli").error(
-            "revisa: use comment, refresh, resolved or review")
+            "revisa: use comment, refresh, resolved, review or send")
     end
 end, {
     nargs = "*",
     range = true,
     complete = function()
-        return { "comment", "refresh", "resolved", "review" }
+        return { "comment", "refresh", "resolved", "review", "send" }
     end,
 })
 

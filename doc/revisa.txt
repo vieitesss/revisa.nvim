@@ -101,6 +101,39 @@ COMMANDS                                                      *revisa-commands*
     The keys are buffer-local. require("revisa").review(worktree) does the
     same as the command.
 
+:Revisa send [WORKTREE]                                         *:Revisa-send*
+    Tell a live agent that comments are waiting on a branch, through
+    Recado. It needs notify = "recado" in |revisa-setup|; without it, or
+    when recado is not on PATH, the command reports why and sends nothing.
+
+    [WORKTREE] is a path or a branch, as for |:Revisa-review|. Without it
+    the worktree is the changes buffer's, the diff view's, or the current
+    file's git worktree. The branch of that worktree goes in the message.
+
+    Only live agents on this machine are offered: remote agents, and
+    Codex, which cannot receive these messages, are dropped. The one
+    agent whose working directory resolves to a worktree root equal to
+    the worktree's is offered first, marked as the match. No match,
+    several matches or an unknown working directory means no
+    preselection. OpenCode's reported working directory is not used.
+    |vim.ui.select| always asks, and cancelling sends nothing.
+
+    The message carries no comment content, only where to read it: >
+
+        revisa: review comments are waiting on branch 'feat/x'. Run:
+        revisa list --branch 'feat/x' --status open. Answer each with
+        revisa resolve, not recado reply.
+<
+    The branch is one line in the message and single-quoted for a shell,
+    with an embedded quote escaped. The send sets RECADO_ADDR=revisa in
+    the child process only, keeps the default message kind and adds
+    --meta revisa_branch=<branch>. Revisa never reads recado inbox and
+    never registers an agent.
+
+    Exit 0 reports "revisa: sent to <id>" and returns without polling.
+    Exit 1 reports the CLI failure from recado's stderr. Exit 2 opens the
+    picker again.
+
 Comments also refresh on BufReadPost of real file buffers and after a successful
 add. Switching to an already loaded buffer does not refresh comments.
 
@@ -216,8 +249,17 @@ autocommand, and highlight groups when the plugin loads.
 
 For configurations that expect a setup function, this is supported: >
 
-    require("revisa").setup({})
+    require("revisa").setup({ notify = "recado" })
 <
-There are no options yet.
+The only option is notify, which chooses how |:Revisa-send| reaches an
+agent: >
+
+    "none"      Do not notify agents. The default.
+    "recado"    Send through recado, which must be on PATH.
+    "rex"       Accepted for a later release. Sending still reports that
+                it needs notify = "recado".
+<
+Any other value is an error naming these three. Without a setup call the
+setting stays "none".
 
 vim:tw=78:ts=4:ft=help:norl:
