@@ -71,13 +71,24 @@ project's default branch, plus uncommitted changes and untracked files.
 On the default branch it shows only the uncommitted work, because
 sessions do not commit there.
 
-| Key    | Action                                               |
-| ------ | ---------------------------------------------------- |
-| `<CR>` | Open the file in that worktree, in the previous window |
-| `R`    | Reload the list from the CLI                          |
-| `q`    | Close the list                                        |
+| Key    | Action                                                 |
+| ------ | ------------------------------------------------------ |
+| `<CR>` | Open the change as a diff: base left, file right        |
+| `o`    | Open the file alone, in the previous window             |
+| `R`    | Reload the list from the CLI                            |
+| `q`    | Close the list                                          |
 
 Comments on the opened file appear as usual.
+
+The diff view opens in a new tab, with the content at the base on the
+left and the real file on the right, both in Neovim's diff mode. The
+right side stays editable, so comments work there like on any file. A
+renamed entry reads its old path on the left, an added or untracked one
+has an empty left side, and a deleted one has an empty right side.
+Revisa computes no diff: git provides the base content and Neovim
+renders the comparison. `q` on the left side closes the tab. A file
+with a NUL byte in its first 8000 bytes is reported as binary instead
+of opened.
 
 The CLI exposes the same data for scripts and agents:
 

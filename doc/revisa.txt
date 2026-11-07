@@ -72,12 +72,31 @@ COMMANDS                                                      *revisa-commands*
 <
     Status is M, A, D, R, or ? for a file git does not track yet.
 
-    <CR>        Open the file in that worktree, in the previous window.
-                Comments on it appear as on any other real file buffer. A
-                deleted entry is reported instead of opening a path that is
-                not there.
+    <CR>        Open the change in a diff view, in a new tab. Details
+                below.
+    o           Open the file in that worktree, in the previous window,
+                alone. Comments on it appear as on any other real file
+                buffer. A deleted entry is reported instead of opening a
+                path that is not there.
     R           Reload the list from the CLI.
     q           Close the list.
+
+    The diff view puts the base content on the left and the worktree file
+    on the right, with 'diff' set in both windows. The left side is a
+    read-only scratch buffer named revisa://<base sha7>/<path>, filled by
+    git show of the base commit and given the filetype of the path. A
+    renamed entry reads its old path there; an added or untracked entry
+    has an empty left side.
+
+    The right side is the real file, so it stays editable and comments
+    work there as on any other real file buffer. A deleted entry has an
+    empty read-only revisa://deleted/<path> on the right, and commenting
+    there is refused like in any other virtual buffer.
+
+    Revisa computes no diff: it reads the left side with git and lets
+    Neovim render the comparison. A file with a NUL byte in the first
+    8000 bytes of either side is reported as "revisa: <path> is binary"
+    and does not open. q on the left side closes the diff tab.
 
     The keys are buffer-local. require("revisa").review(worktree) does the
     same as the command.
@@ -121,7 +140,7 @@ There are no default keymaps. Example user mappings: >
     vim.keymap.set("x", "<leader>rc", "<Plug>(revisa-comment)")
     vim.keymap.set("n", "<leader>rr", "<cmd>Revisa review<cr>")
 <
-The changes buffer adds its own buffer-local <CR>, R and q keys.
+The changes buffer adds its own buffer-local <CR>, o, R and q keys.
 ==============================================================================
 DISPLAY                                                        *revisa-display*
 

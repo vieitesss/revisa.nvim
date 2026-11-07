@@ -1,6 +1,7 @@
 local M = {}
 local api = vim.api
 local cli = require("revisa.cli")
+local diff = require("revisa.diff")
 
 local function decode(context, args)
     local output = cli.run(context, args)
@@ -71,6 +72,7 @@ local function draw(buf, data)
     vim.bo[buf].modifiable = false
     vim.b[buf].revisa_changes = entries
     vim.b[buf].revisa_worktree = data.worktree
+    vim.b[buf].revisa_base = data.base
     api.nvim_win_set_cursor(0, { math.min(cursor, #lines), 0 })
 end
 
@@ -106,6 +108,20 @@ local function openEntry(buf)
         api.nvim_set_current_win(previous)
     end
     vim.cmd.edit(vim.fn.fnameescape(worktree .. "/" .. change.path))
+end
+
+local function openDiff(buf)
+    local change = M.entry(buf)
+    if not change then
+        return
+    end
+    diff.open({
+        worktree = vim.b[buf].revisa_worktree,
+        commit = vim.b[buf].revisa_base,
+        status = change.status,
+        path = change.path,
+        old_path = change.old_path,
+    })
 end
 
 local function reload(buf)
@@ -148,6 +164,9 @@ function M.open(request)
     api.nvim_win_set_buf(0, buf)
     draw(buf, data)
     vim.keymap.set("n", "<CR>", function()
+        openDiff(buf)
+    end, { buffer = buf, nowait = true, desc = "revisa: open the diff" })
+    vim.keymap.set("n", "o", function()
         openEntry(buf)
     end, { buffer = buf, nowait = true, desc = "revisa: open the file" })
     vim.keymap.set("n", "R", function()

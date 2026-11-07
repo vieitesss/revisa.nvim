@@ -1,0 +1,154 @@
+local api = vim.api
+local case = vim.env.REVISA_CASE
+
+local function lines(buf)
+    return api.nvim_buf_get_lines(buf, 0, -1, false)
+end
+
+local function env(name)
+    return vim.json.decode(vim.env[name])
+end
+
+local function find(buf, text)
+    for i, line in ipairs(lines(buf)) do
+        if line == text then
+            return i
+        end
+    end
+    error("no line " .. text .. " in " .. vim.inspect(lines(buf)))
+end
+
+-- review opens the changes list and puts the cursor on the entry.
+local function review()
+    require("revisa").review(vim.env.REVISA_TARGET)
+    local buf = api.nvim_get_current_buf()
+    api.nvim_win_set_cursor(0, { find(buf, vim.env.REVISA_ENTRY), 0 })
+    return buf
+end
+
+-- sides returns the old and new windows of the open diff tab.
+local function sides()
+    local old, new
+    for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do
+        local name = api.nvim_buf_get_name(api.nvim_win_get_buf(win))
+        if name:find("^revisa://deleted/") then
+            new = win
+        elseif name:find("^revisa://") then
+            old = win
+        else
+            new = win
+        end
+    end
+    assert(old and new, "diff sides not found")
+    return old, new
+end
+
+local function check_old(win)
+    local buf = api.nvim_win_get_buf(win)
+    H.equal(vim.env.REVISA_OLD_NAME, api.nvim_buf_get_name(buf))
+    H.equal("nofile", vim.bo[buf].buftype)
+    H.equal(false, vim.bo[buf].modifiable)
+    H.equal(false, vim.bo[buf].swapfile)
+    H.equal("wipe", vim.bo[buf].bufhidden)
+    local filetype = vim.env.REVISA_FILE_TYPE or ""
+    if filetype ~= "" then
+        H.equal(filetype, vim.bo[buf].filetype)
+    end
+    H.equal(env("REVISA_OLD_LINES"), lines(buf))
+    H.equal({
+        worktree = vim.env.REVISA_WORKTREE,
+        commit = vim.env.REVISA_COMMIT,
+        path = vim.env.REVISA_OLD_PATH,
+    }, vim.b[buf].revisa_old)
+end
+
+local function check_new(win)
+    local buf = api.nvim_win_get_buf(win)
+    H.equal(vim.env.REVISA_NEW_NAME, api.nvim_buf_get_name(buf))
+    H.equal(env("REVISA_NEW_LINES"), lines(buf))
+    if vim.env.REVISA_DELETED == "1" then
+        H.equal("nofile", vim.bo[buf].buftype)
+        H.equal(false, vim.bo[buf].modifiable)
+        return
+    end
+    H.equal("", vim.bo[buf].buftype)
+    H.equal(true, vim.bo[buf].modifiable)
+end
+
+-- check_diff asserts the whole diff tab: old left, new right, both in
+-- diff mode, each side in the right buffer.
+local function check_diff()
+    H.equal(2, #api.nvim_list_tabpages())
+    local old, new = sides()
+    local layout = vim.fn.winlayout()
+    H.equal("row", layout[1])
+    H.equal(old, layout[2][1][2])
+    H.equal(new, layout[2][2][2])
+    H.equal(true, vim.wo[old].diff)
+    H.equal(true, vim.wo[new].diff)
+    H.equal(old, api.nvim_get_current_win())
+    check_old(old)
+    check_new(new)
+    return old, new
+end
+
+if case == "deleted" then
+    review()
+    return function()
+        H.keys("<CR>")
+        return function()
+            local _, new = check_diff()
+            local messages = H.notifications()
+            api.nvim_set_current_win(new)
+            vim.cmd("Revisa comment")
+            H.error(messages, "revisa: comments require a real file buffer")
+        end
+    end
+elseif case == "editable" then
+    review()
+    return function()
+        H.keys("<CR>")
+        return function()
+            local _, new = check_diff()
+            api.nvim_set_current_win(new)
+            api.nvim_buf_set_lines(api.nvim_win_get_buf(new), 0, -1, false,
+                env("REVISA_WRITE_LINES"))
+            vim.cmd.write()
+            H.equal(false, vim.bo[api.nvim_win_get_buf(new)].modified)
+        end
+    end
+elseif case == "close" then
+    local list = review()
+    return function()
+        H.keys("<CR>")
+        return function()
+            local old = check_diff()
+            api.nvim_set_current_win(old)
+            H.keys("q")
+            return function()
+                H.equal(1, #api.nvim_list_tabpages())
+                H.equal(list, api.nvim_get_current_buf())
+                H.equal(2, #api.nvim_list_wins())
+            end
+        end
+    end
+elseif case == "binary" then
+    local messages = H.notifications()
+    local list = review()
+    return function()
+        H.keys("<CR>")
+        return function()
+            H.error(messages, vim.env.REVISA_BINARY)
+            H.equal(1, #api.nvim_list_tabpages())
+            H.equal(list, api.nvim_get_current_buf())
+        end
+    end
+else
+    review()
+    return function()
+        H.keys("<CR>")
+        return function()
+            check_diff()
+        end
+    end
+end
