@@ -48,22 +48,24 @@ func TestResolveErrors(t *testing.T) {
 		name string
 		args []string
 		msg  string
+		code int
 	}{
 		{"unknown id", []string{unknown, "--reply", "r"},
-			`no comment with this id: "` + unknown + `"`},
+			`no comment with this id: "` + unknown + `"`, 1},
 		{"path as id", []string{"../../HEAD", "--reply", "r"},
-			"no comment with this id"},
-		{"no id", []string{"--reply", "r"}, "pass exactly one comment id"},
+			"no comment with this id", 1},
+		{"no id", []string{"--reply", "r"}, "pass exactly one comment id", 2},
 		{"two ids", []string{id, id, "--reply", "r"},
-			"pass exactly one comment id"},
-		{"no reply", []string{id}, "--reply is required"},
-		{"blank reply", []string{id, "--reply", " "}, "--reply is required"},
+			"pass exactly one comment id", 2},
+		{"no reply", []string{id}, "--reply is required", 2},
+		{"blank reply", []string{id, "--reply", " "}, "--reply is required", 2},
 		{"already resolved", []string{resolved, "--reply", "again"},
-			"already resolved"},
+			"already resolved", 1},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			fails(t, wt, c.msg, append([]string{"resolve"}, c.args...)...)
+			args := append([]string{"resolve"}, c.args...)
+			fails(t, wt, c.msg, c.code, args...)
 		})
 	}
 	got := listJSON(t, wt, "--status", "resolved")

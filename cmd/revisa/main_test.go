@@ -2,7 +2,6 @@ package main_test
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,102 +24,6 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)
-}
-
-func git(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
-		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
-		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-	return strings.TrimSpace(string(out))
-}
-
-type project struct {
-	worktrees []string
-}
-
-func normalClone(t *testing.T) project {
-	root := t.TempDir()
-	main := filepath.Join(root, "main")
-	git(t, root, "init", "-q", "-b", "main", main)
-	git(t, main, "commit", "-q", "--allow-empty", "-m", "init")
-	linked := filepath.Join(root, "linked")
-	git(t, main, "worktree", "add", "-q", "-b", "feat/x", linked)
-	return project{worktrees: []string{main, linked}}
-}
-
-func bareRepo(t *testing.T) project {
-	root := t.TempDir()
-	seed := filepath.Join(root, "seed")
-	git(t, root, "init", "-q", "-b", "main", seed)
-	git(t, seed, "commit", "-q", "--allow-empty", "-m", "init")
-	bare := filepath.Join(root, "repo.git")
-	git(t, root, "clone", "-q", "--bare", seed, bare)
-	a := filepath.Join(root, "a")
-	b := filepath.Join(root, "b")
-	git(t, bare, "worktree", "add", "-q", a, "main")
-	git(t, bare, "worktree", "add", "-q", "-b", "feat/x", b)
-	return project{worktrees: []string{a, b}}
-}
-
-func addMocks(t *testing.T, worktree string) {
-	t.Helper()
-	common := git(t, worktree,
-		"rev-parse", "--path-format=absolute", "--git-common-dir")
-	storeDir := filepath.Join(common, "revisa")
-	if err := os.MkdirAll(storeDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	mocks, err := filepath.Glob("../../testdata/comments/*.json")
-	if err != nil || len(mocks) == 0 {
-		t.Fatalf("no mocks: %v", err)
-	}
-	for _, m := range mocks {
-		data, err := os.ReadFile(m)
-		if err != nil {
-			t.Fatal(err)
-		}
-		dst := filepath.Join(storeDir, filepath.Base(m))
-		if err := os.WriteFile(dst, data, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
-func run(
-	t *testing.T, dir string, args ...string,
-) (stdout, stderr string, code int) {
-	t.Helper()
-	cmd := exec.Command(revisa, args...)
-	cmd.Dir = dir
-	var out, errOut strings.Builder
-	cmd.Stdout = &out
-	cmd.Stderr = &errOut
-	err := cmd.Run()
-	if exit, ok := errors.AsType[*exec.ExitError](err); ok {
-		code = exit.ExitCode()
-	} else if err != nil {
-		t.Fatal(err)
-	}
-	return out.String(), errOut.String(), code
-}
-
-// fails runs revisa and checks it exits non-zero with msg on stderr.
-func fails(t *testing.T, dir, msg string, args ...string) {
-	t.Helper()
-	_, stderr, code := run(t, dir, args...)
-	if code == 0 {
-		t.Errorf("want non-zero exit")
-	}
-	if !strings.Contains(stderr, msg) {
-		t.Errorf("stderr %q lacks %q", stderr, msg)
-	}
 }
 
 const openOnFeatX = `01JC8Z7K3M9QX2V5T1R4N6P8WY src/a.lua:12-14 new abc123
@@ -203,7 +106,7 @@ func TestListOnDetachedHeadNeedsBranch(t *testing.T) {
 	p := normalClone(t)
 	git(t, p.worktrees[1], "checkout", "-q", "--detach")
 	_, stderr, code := run(t, p.worktrees[1], "list")
-	if code == 0 || !strings.Contains(stderr, "HEAD is detached") {
+	if code != 1 || !strings.Contains(stderr, "HEAD is detached") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 }
@@ -254,29 +157,103 @@ func TestListEmptyStore(t *testing.T) {
 	}
 }
 
-func TestErrors(t *testing.T) {
-	p := normalClone(t)
+func TestUsageExitCodes(t *testing.T) {
 	cases := []struct {
 		name string
-		dir  string
 		args []string
 		msg  string
 	}{
-		{"no command", p.worktrees[0], nil, "usage: revisa"},
-		{"unknown command", p.worktrees[0], []string{"frob"},
-			`unknown command "frob"`},
-		{"bad status", p.worktrees[0], []string{"list", "--status", "done"},
+		{"no command", nil, "usage: revisa"},
+		{"unknown command", []string{"frob"}, `unknown command "frob"`},
+		{"bad status", []string{"list", "--status", "bogus"},
 			"--status must be open or resolved"},
-		{"unknown flag", p.worktrees[0], []string{"list", "--nope"},
-			"flag provided but not defined: -nope"},
-		{"stray argument", p.worktrees[0], []string{"list", "x"},
-			`unexpected argument "x"`},
-		{"outside git", t.TempDir(), []string{"list"},
-			"not inside a git repository"},
+		{"stray argument", []string{"list", "x"}, `unexpected argument "x"`},
+		{"bad boolean", []string{"list", "--json=bogus"},
+			`invalid boolean value "bogus" for -json`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			fails(t, c.dir, c.msg, c.args...)
+			fails(t, t.TempDir(), c.msg, 2, c.args...)
+		})
+	}
+}
+
+func TestNonGitMissingStore(t *testing.T) {
+	root := t.TempDir()
+	for _, args := range [][]string{{"list"}, {"list", "--json"}} {
+		out, stderr, code := run(t, root, args...)
+		want := ""
+		if len(args) > 1 {
+			want = "[]\n"
+		}
+		if code != 0 || stderr != "" || out != want {
+			t.Errorf("exit %d, stdout %q, stderr %q", code, out, stderr)
+		}
+	}
+	id := "01JC8Z7K3M9QX2V5T1R4N6P8WY"
+	fails(t, root, `no comment with this id: "`+id+`"`, 1,
+		"resolve", id, "--reply", "Unknown")
+	if _, err := os.Stat(filepath.Join(root, ".revisa")); !os.IsNotExist(err) {
+		t.Errorf("read commands created store: %v", err)
+	}
+}
+
+func TestHelpShowsExitCodes(t *testing.T) {
+	for _, arg := range []string{"help", "--help", "-h"} {
+		t.Run(arg, func(t *testing.T) {
+			stdout, stderr, code := run(t, t.TempDir(), arg)
+			if code != 0 || stderr != "" {
+				t.Errorf("exit %d, stderr %q", code, stderr)
+			}
+			want := "exit codes:\n" +
+				"  0  success\n" +
+				"  1  command failed\n" +
+				"  2  usage error\n"
+			if !strings.Contains(stdout, want) {
+				t.Errorf("stdout %q lacks %q", stdout, want)
+			}
+		})
+	}
+}
+
+func TestCommandHelpExitsSuccessfully(t *testing.T) {
+	for _, command := range []string{"list", "add", "resolve", "migrate"} {
+		for _, flag := range []string{"--help", "-h"} {
+			t.Run(command+"/"+flag, func(t *testing.T) {
+				stdout, stderr, code := run(t, t.TempDir(), command, flag)
+				want := "Usage of " + command + ":"
+				if code != 0 || stdout != "" ||
+					!strings.Contains(stderr, want) {
+					t.Errorf("exit %d, stdout %q, stderr %q",
+						code, stdout, stderr)
+				}
+			})
+		}
+	}
+}
+
+func TestFlagUsageExitCodes(t *testing.T) {
+	cases := []struct {
+		command string
+		flag    string
+	}{
+		{"list", "--branch"},
+		{"add", "--path"},
+		{"resolve", "--reply"},
+		{"migrate", "--branch"},
+		{"ls", "--branch"},
+	}
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			t.Run("unknown flag", func(t *testing.T) {
+				fails(t, t.TempDir(),
+					"flag provided but not defined: -nope",
+					2, c.command, "--nope")
+			})
+			t.Run("missing value", func(t *testing.T) {
+				fails(t, t.TempDir(), "flag needs an argument",
+					2, c.command, c.flag)
+			})
 		})
 	}
 }
@@ -289,7 +266,7 @@ func TestCorruptCommentNamesTheFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, stderr, code := run(t, p.worktrees[0], "list")
-	if code == 0 || !strings.Contains(stderr, "BROKEN.json") {
+	if code != 1 || !strings.Contains(stderr, "BROKEN.json") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 }
@@ -305,7 +282,7 @@ func TestListReportsUnreadableStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Chmod(store, 0o755) })
-	fails(t, p.worktrees[1], "read store", "list", "--json")
+	fails(t, p.worktrees[1], "read store", 1, "list", "--json")
 }
 
 func TestStoreIsUntrackedAndSurvivesClean(t *testing.T) {

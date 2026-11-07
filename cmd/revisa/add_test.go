@@ -1,12 +1,10 @@
 package main_test
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
-	"strings"
 	"testing"
 )
 
@@ -24,40 +22,6 @@ func reviewProject(t *testing.T) (p project, commit string) {
 	git(t, linked, "commit", "-q", "-m", "add a.lua")
 	writeFile(t, linked, "src/a.lua", editedLua)
 	return p, git(t, linked, "rev-parse", "HEAD")
-}
-
-func writeFile(t *testing.T, dir, path, content string) {
-	t.Helper()
-	full := filepath.Join(dir, path)
-	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func listJSON(t *testing.T, dir string, args ...string) []map[string]any {
-	t.Helper()
-	out, stderr, code := run(t, dir, append([]string{"list", "--json"},
-		args...)...)
-	if code != 0 {
-		t.Fatalf("list exit %d: %s", code, stderr)
-	}
-	var got []map[string]any
-	if err := json.Unmarshal([]byte(out), &got); err != nil {
-		t.Fatalf("not JSON: %v\n%s", err, out)
-	}
-	return got
-}
-
-func addOK(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	out, stderr, code := run(t, dir, append([]string{"add"}, args...)...)
-	if code != 0 {
-		t.Fatalf("add exit %d: %s", code, stderr)
-	}
-	return strings.TrimSpace(out)
 }
 
 func TestAddNewSideReadsAnchorFromWorktree(t *testing.T) {
@@ -188,47 +152,49 @@ func TestAddErrors(t *testing.T) {
 		dir  string
 		args []string
 		msg  string
+		code int
 	}{
 		{"no flags", linked, nil,
-			"--path, --lines and --body are required"},
+			"--path, --lines and --body are required", 2},
 		{"blank body", linked, []string{"--path", "src/a.lua",
 			"--lines", "1", "--body", "  "},
-			"--path, --lines and --body are required"},
+			"--path, --lines and --body are required", 2},
 		{"zero line", linked, append(file, "--lines", "0"),
-			"--lines must be N or N-M"},
+			"--lines must be N or N-M", 2},
 		{"reversed range", linked, append(file, "--lines", "4-2"),
-			"--lines must be N or N-M"},
+			"--lines must be N or N-M", 2},
 		{"not a number", linked, append(file, "--lines", "a"),
-			"--lines must be N or N-M"},
+			"--lines must be N or N-M", 2},
 		{"past the end", linked, append(file, "--lines", "5-6"),
-			"past the end of src/a.lua (5 lines)"},
+			"past the end of src/a.lua (5 lines)", 1},
 		{"missing file", linked, []string{"--path", "nope.lua",
-			"--lines", "1", "--body", "b"}, "nope.lua not found"},
+			"--lines", "1", "--body", "b"}, "nope.lua not found", 1},
 		{"absolute path", linked, []string{"--path", "/etc/hosts",
-			"--lines", "1", "--body", "b"}, "relative to the repo root"},
+			"--lines", "1", "--body", "b"}, "relative to the repo root", 2},
 		{"escaping path", linked, []string{"--path", "../x",
-			"--lines", "1", "--body", "b"}, "relative to the repo root"},
+			"--lines", "1", "--body", "b"}, "relative to the repo root", 2},
 		{"bad side", linked, append(file, "--lines", "1",
-			"--side", "left"), "--side must be new or old"},
+			"--side", "left"), "--side must be new or old", 2},
 		{"old without commit", linked, append(file, "--lines", "1",
-			"--side", "old"), "--side old requires --commit"},
+			"--side", "old"), "--side old requires --commit", 2},
 		{"commit on new side", linked, append(file, "--lines", "1",
-			"--commit", "HEAD"), "--commit only applies to --side old"},
+			"--commit", "HEAD"), "--commit only applies to --side old", 2},
 		{"unknown commit", linked, append(file, "--lines", "1",
-			"--side", "old", "--commit", "nope"), `unknown commit "nope"`},
+			"--side", "old", "--commit", "nope"), `unknown commit "nope"`, 1},
 		{"path not in commit", linked, []string{"--path", "zz.lua",
 			"--lines", "1", "--body", "b", "--side", "old",
-			"--commit", "HEAD"}, "zz.lua not found at"},
+			"--commit", "HEAD"}, "zz.lua not found at", 1},
 		{"branch not checked out", linked, append(file, "--lines", "1",
-			"--branch", "gone"), `branch "gone" is not checked out`},
+			"--branch", "gone"), `branch "gone" is not checked out`, 1},
 		{"detached head", detached, append(file, "--lines", "1"),
-			"HEAD is detached, pass --branch"},
+			"HEAD is detached, pass --branch", 1},
 		{"stray argument", linked, append(file, "--lines", "1", "x"),
-			`unexpected argument "x"`},
+			`unexpected argument "x"`, 2},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			fails(t, c.dir, c.msg, append([]string{"add"}, c.args...)...)
+			args := append([]string{"add"}, c.args...)
+			fails(t, c.dir, c.msg, c.code, args...)
 		})
 	}
 	if got := listJSON(t, linked); len(got) != 0 {
