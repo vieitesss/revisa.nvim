@@ -4,6 +4,12 @@ local padding = api.nvim_create_namespace("revisa.padding")
 
 function M.open(buf, last, save)
     local source = api.nvim_get_current_win()
+    local text = api.nvim_buf_get_lines(buf, last - 1, last, false)[1]
+    local column = math.max(0, #text - 1)
+    api.nvim_win_set_cursor(source, { last, column })
+    api.nvim_win_call(source, function()
+        vim.cmd("normal! zv")
+    end)
     local height = math.min(4, api.nvim_win_get_height(source) - 1)
     height = math.max(1, height)
     local lines = {}
@@ -13,9 +19,6 @@ function M.open(buf, last, save)
     local mark = api.nvim_buf_set_extmark(buf, padding, last - 1, 0, {
         virt_lines = lines,
     })
-    local text = api.nvim_buf_get_lines(buf, last - 1, last, false)[1]
-    local column = math.max(0, #text - 1)
-    api.nvim_win_set_cursor(source, { last, column })
     vim.cmd.redraw()
     local position = vim.fn.screenpos(source, last, math.max(1, #text))
     local top = vim.fn.win_screenpos(source)

@@ -74,6 +74,17 @@ func TestBufferFloatDoesNotCoverExistingComment(t *testing.T) {
 	}
 }
 
+func TestBufferFloatDoesNotCoverFileLinesInClosedFold(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	writeFile(t, linked, "folded.txt", strings.Repeat("file line\n", 20))
+	headless(t, linked, "fold.lua",
+		"REVISA_FILE="+filepath.Join(linked, "folded.txt"))
+	if got := listJSON(t, linked); len(got) != 0 {
+		t.Errorf("cancel stored comments: %v", got)
+	}
+}
+
 func TestBufferClosingFloatRemovesPadding(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
