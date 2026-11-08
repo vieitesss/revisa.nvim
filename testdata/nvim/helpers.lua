@@ -150,3 +150,74 @@ function H.float()
     end
     error("comment float not found")
 end
+
+-- H.signs returns one entry per sign: its 1-based line, text and group.
+function H.signs(buf)
+    local signs = {}
+    for _, mark in ipairs(H.marks(buf)) do
+        local details = mark[4]
+        if details.sign_text then
+            signs[#signs + 1] = {
+                line = mark[2] + 1,
+                text = vim.trim(details.sign_text),
+                group = details.sign_hl_group,
+            }
+        end
+    end
+    table.sort(signs, function(a, b)
+        return a.line < b.line
+    end)
+    return signs
+end
+
+-- H.virtual returns each block of virtual lines: its 0-based row, whether
+-- it is above that row, and its chunks.
+function H.virtual(buf)
+    local blocks = {}
+    for _, mark in ipairs(H.marks(buf)) do
+        local details = mark[4]
+        if details.virt_lines then
+            blocks[#blocks + 1] = {
+                row = mark[2],
+                above = details.virt_lines_above and true or false,
+                lines = details.virt_lines,
+            }
+        end
+    end
+    return blocks
+end
+
+-- H.text returns the right-aligned virtual text, or nil.
+function H.text(buf)
+    for _, mark in ipairs(H.marks(buf)) do
+        local details = mark[4]
+        if details.virt_text and details.virt_text_pos == "right_align"
+        then
+            return details.virt_text
+        end
+    end
+end
+
+-- H.screen returns the rendered rows of the screen, trailing blanks
+-- trimmed. Set 'lines' and 'columns' before drawing so every row fits.
+function H.screen()
+    vim.cmd.redraw()
+    local rows = {}
+    for row = 1, vim.o.lines do
+        local chars = {}
+        for col = 1, vim.o.columns do
+            chars[#chars + 1] = vim.fn.screenstring(row, col)
+        end
+        rows[row] = (table.concat(chars):gsub("%s+$", ""))
+    end
+    return rows
+end
+
+-- H.row returns the first screen row that holds text, or nil.
+function H.row(rows, text)
+    for row, line in ipairs(rows) do
+        if line:find(text, 1, true) then
+            return row
+        end
+    end
+end

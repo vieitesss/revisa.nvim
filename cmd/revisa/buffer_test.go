@@ -397,7 +397,10 @@ func TestBufferCommentOnLine(t *testing.T) {
 	}
 }
 
-func TestBufferOutdatedCommentsDrawNothing(t *testing.T) {
+// TestBufferOutdatedCommentsDrawEndBlock covers #12: a comment whose
+// anchor text is gone is drawn in one block below the last line, with its
+// body and was: lines, and never as a sign on the stored line.
+func TestBufferOutdatedCommentsDrawEndBlock(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
 	addOK(t, linked, "--path", "src/a.lua", "--lines", "5",
@@ -406,5 +409,30 @@ func TestBufferOutdatedCommentsDrawNothing(t *testing.T) {
 	writeFile(t, linked, "src/a.lua", "local a = 1\nlocal x = y\nif x then\n"+
 		"  run(x)\n")
 	headless(t, linked, "outdated.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+}
+
+// TestBufferCommentFollowsLinesInsertedAbove covers #12: lines inserted
+// above a comment move its sign to the lines its anchor text is on now.
+func TestBufferCommentFollowsLinesInsertedAbove(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "2", "--body", "Kept")
+	writeFile(t, linked, "src/a.lua", "local head = 0\n"+editedLua)
+	headless(t, linked, "moved.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+}
+
+// TestBufferCommentReturnsWhenAnchorTextComesBack covers #12: an outdated
+// comment returns to its line, and the block disappears, once the anchor
+// text is in the file again.
+func TestBufferCommentReturnsWhenAnchorTextComesBack(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "5",
+		"--body", "This text is gone")
+	writeFile(t, linked, "src/a.lua", "local a = 1\nlocal x = y\nif x then\n"+
+		"  run(x)\n")
+	headless(t, linked, "returned.lua",
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
 }

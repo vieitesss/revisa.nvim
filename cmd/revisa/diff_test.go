@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -111,6 +112,27 @@ func TestBufferDiffDeletedFileHasEmptyNewSide(t *testing.T) {
 	p, linked := changesProject(t)
 	runDiff(t, p, linked, diffCase{
 		name: "deleted", entry: "D src/gone.go",
+		path: "src/gone.go", oldPath: "src/gone.go",
+		old:      []string{"package gone"},
+		new:      []string{""},
+		fileType: "go",
+		deleted:  true,
+	})
+}
+
+// TestBufferDiffDeletedFileShowsOutdatedBlock covers #12 on a deleted
+// file: its empty new side has no lines, so its comments show in the end
+// block instead of on a guessed line.
+func TestBufferDiffDeletedFileShowsOutdatedBlock(t *testing.T) {
+	p, linked := changesProject(t)
+	writeFile(t, linked, "src/gone.go", "package gone\n")
+	addOK(t, linked, "--path", "src/gone.go", "--lines", "1",
+		"--body", "Gone with the file")
+	if err := os.Remove(filepath.Join(linked, "src/gone.go")); err != nil {
+		t.Fatal(err)
+	}
+	runDiff(t, p, linked, diffCase{
+		name: "deleted-outdated", entry: "D src/gone.go",
 		path: "src/gone.go", oldPath: "src/gone.go",
 		old:      []string{"package gone"},
 		new:      []string{""},

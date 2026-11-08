@@ -120,6 +120,44 @@ if case == "deleted" then
             H.error(messages, "not found in")
         end
     end
+elseif case == "deleted-outdated" then
+    review()
+    return function()
+        H.keys("<CR>")
+        return function()
+            local _, new = check_diff()
+            local buf = api.nvim_win_get_buf(new)
+            H.equal({}, H.signs(buf))
+            H.equal({
+                {
+                    row = 1,
+                    above = true,
+                    lines = {
+                        { { "outdated (1)", "RevisaOutdated" } },
+                        { { "Gone with the file", "RevisaComment" } },
+                        { { "was: package gone", "RevisaWas" } },
+                    },
+                },
+            }, H.virtual(buf))
+            H.equal({ { "revisa: 1 outdated", "RevisaOutdated" } },
+                H.text(buf))
+            -- The block is rendered in the empty right window.
+            vim.o.lines = 20
+            vim.o.columns = 100
+            local rows = H.screen()
+            local heading = H.row(rows, "outdated (1)")
+            assert(heading and heading > 1,
+                "block not rendered: " .. vim.inspect(rows))
+            assert(rows[heading + 1]:find("Gone with the file", 1, true),
+                "body not rendered: " .. vim.inspect(rows))
+            assert(rows[heading + 2]:find("was: package gone", 1, true),
+                "was: not rendered: " .. vim.inspect(rows))
+            local summary = H.row(rows, "revisa: 1 outdated")
+            assert(summary and summary < heading,
+                "summary not rendered above the block: "
+                .. vim.inspect(rows))
+        end
+    end
 elseif case == "editable" then
     review()
     return function()

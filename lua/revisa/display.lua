@@ -1,5 +1,6 @@
 local M = {}
 local api = vim.api
+local placement = require("revisa.placement")
 local namespace = api.nvim_create_namespace("revisa.comments")
 local drawn = {}
 
@@ -16,68 +17,108 @@ function M.buffers()
     return bufs
 end
 
-local function shown(comment, count, show_resolved)
-    -- Outdated and unknown comments have no current lines to draw on.
-    if comment.side ~= "new" or type(comment.line_end) ~= "number"
-        or comment.line_end > count
-    then
-        return false
+-- groups is the order the end block groups markers in, with the highlight
+-- group of each heading.
+local groups = {
+    { condition = "outdated", group = "RevisaOutdated" },
+    { condition = "unknown", group = "RevisaUnknown" },
+}
+
+-- anchored draws a comment on its lines: a sign on each, the body below.
+local function anchored(buf, placed)
+    for line = placed.line_start, placed.line_end do
+        api.nvim_buf_set_extmark(buf, namespace, line - 1, 0, {
+            sign_text = placed.sign,
+            sign_hl_group = placed.group,
+        })
     end
-    if comment.status == "resolved" then
-        return show_resolved
-    end
-    return comment.status == "open"
+    -- Leave room for padding below the anchor, even on empty lines.
+    api.nvim_buf_set_extmark(buf, namespace, placed.line_end, 0, {
+        virt_lines = placed.body,
+        virt_lines_above = true,
+        right_gravity = false,
+    })
 end
 
-local function body_lines(comment)
+-- block groups the markers by condition into one block of virtual lines.
+-- counts holds how many markers each condition has.
+local function block(markers)
+    local counts = {}
+    for _, group in ipairs(groups) do
+        counts[group.condition] = 0
+    end
+    for _, placed in ipairs(markers) do
+        counts[placed.condition] = counts[placed.condition] + 1
+    end
     local lines = {}
-    local function add(text, group)
-        for _, line in ipairs(vim.split(text, "\n", { plain = true })) do
-            lines[#lines + 1] = { { line, group } }
+    for _, group in ipairs(groups) do
+        local count = counts[group.condition]
+        if count > 0 then
+            if #lines > 0 then
+                lines[#lines + 1] = { { "", "RevisaComment" } }
+            end
+            lines[#lines + 1] = {
+                { group.condition .. " (" .. count .. ")", group.group },
+            }
+            for _, placed in ipairs(markers) do
+                if placed.condition == group.condition then
+                    vim.list_extend(lines, placed.body)
+                    vim.list_extend(lines, placed.was)
+                end
+            end
         end
     end
-    add(comment.body, "RevisaComment")
-    if type(comment.reply) == "string" then
-        local reply = vim.split(comment.reply, "\n", { plain = true })
-        reply[1] = "reply: " .. reply[1]
-        for _, line in ipairs(reply) do
-            lines[#lines + 1] = { { line, "RevisaReply" } }
-        end
-    end
-    return lines
+    return lines, counts
 end
 
--- draw shows the comments of the file version target names. Only a
--- new-side target draws them: an old-side one has none to show.
+-- summary is the line-1 text that makes the block findable in a long file.
+local function summary(counts)
+    local parts = {}
+    for _, group in ipairs(groups) do
+        local count = counts[group.condition]
+        if count > 0 then
+            parts[#parts + 1] = count .. " " .. group.condition
+        end
+    end
+    if #parts == 0 then
+        return nil
+    end
+    return "revisa: " .. table.concat(parts, ", ")
+end
+
+-- draw shows the comments of the file version target names. A comment
+-- with no current lines is drawn in one block below the last line, not on
+-- a guessed line.
 function M.draw(buf, target, comments, show_resolved)
     api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
-    if target.side ~= "new" then
+    if not target or target.kind ~= "file" then
         return
     end
     drawn[buf] = true
     local count = api.nvim_buf_line_count(buf)
+    local markers = {}
     for _, comment in ipairs(comments) do
-        if comment.path == target.path
-            and shown(comment, count, show_resolved)
-        then
-            local sign, sign_group = ">", "RevisaSign"
-            if comment.status == "resolved" then
-                sign, sign_group = "✓", "RevisaResolved"
-            end
-            for line = comment.line_start, comment.line_end do
-                api.nvim_buf_set_extmark(buf, namespace, line - 1, 0, {
-                    sign_text = sign,
-                    sign_hl_group = sign_group,
-                })
-            end
-            -- Leave room for padding below the anchor, even on empty lines.
-            api.nvim_buf_set_extmark(buf, namespace, comment.line_end, 0, {
-                virt_lines = body_lines(comment),
-                virt_lines_above = true,
-                right_gravity = false,
-            })
+        local placed = placement.place(comment, target, count, show_resolved)
+        if placed.kind == "anchored" then
+            anchored(buf, placed)
+        elseif placed.kind == "marker" then
+            markers[#markers + 1] = placed
         end
     end
+    local lines, counts = block(markers)
+    if #lines == 0 then
+        return
+    end
+    -- virt_lines_above on the line past the end is what renders below the
+    -- last line: the same extmark without it is stored but never drawn.
+    api.nvim_buf_set_extmark(buf, namespace, count, 0, {
+        virt_lines = lines,
+        virt_lines_above = true,
+    })
+    api.nvim_buf_set_extmark(buf, namespace, 0, 0, {
+        virt_text = { { summary(counts), "RevisaOutdated" } },
+        virt_text_pos = "right_align",
+    })
 end
 
 return M

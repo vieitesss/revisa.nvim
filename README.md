@@ -92,6 +92,14 @@ computes no diff: git provides the base content and Neovim renders the
 comparison. `q` on the left side closes the tab. A file with a NUL byte
 in its first 8000 bytes is reported as binary instead of opened.
 
+A comment with no current lines is never drawn on a guessed line. Outdated
+comments, and unknown ones whose branch is gone, appear in one block below
+the last line, headed `outdated (N)` or `unknown (N)`, each with its body
+and the `was:` lines it was made on. A right-aligned line-1 summary shows
+the counts. The block is redrawn by `:Revisa refresh` and disappears when
+the anchor text is back, and the empty right side of a deleted file shows
+it too. See `:help revisa-display`.
+
 The CLI exposes the same data for scripts and agents:
 
 ```sh

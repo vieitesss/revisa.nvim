@@ -3,6 +3,11 @@ H.open()
 require("revisa").setup({})
 vim.cmd("runtime plugin/revisa.lua")
 H.equal(2, vim.fn.exists(":Revisa"))
+H.equal("DiagnosticWarn",
+    api.nvim_get_hl(0, { name = "RevisaOutdated" }).link)
+H.equal("DiagnosticError",
+    api.nvim_get_hl(0, { name = "RevisaUnknown" }).link)
+H.equal("Comment", api.nvim_get_hl(0, { name = "RevisaWas" }).link)
 for _, mode in ipairs({ "n", "x" }) do
     H.equal("<Plug>(revisa-comment)",
         vim.fn.maparg("<Plug>(revisa-comment)", mode, false, true).lhs)
@@ -12,6 +17,9 @@ api.nvim_set_hl(0, "RevisaSign", { link = "Error" })
 api.nvim_set_hl(0, "RevisaComment", { link = "String" })
 api.nvim_set_hl(0, "RevisaResolved", { link = "WarningMsg" })
 api.nvim_set_hl(0, "RevisaReply", { link = "Title" })
+api.nvim_set_hl(0, "RevisaOutdated", { link = "WarningMsg" })
+api.nvim_set_hl(0, "RevisaUnknown", { link = "ErrorMsg" })
+api.nvim_set_hl(0, "RevisaWas", { link = "String" })
 vim.g.loaded_revisa = nil
 vim.cmd("runtime plugin/revisa.lua")
 H.equal("Error", api.nvim_get_hl(0, { name = "RevisaSign" }).link)
@@ -19,6 +27,11 @@ H.equal("String", api.nvim_get_hl(0, { name = "RevisaComment" }).link)
 H.equal("WarningMsg",
     api.nvim_get_hl(0, { name = "RevisaResolved" }).link)
 H.equal("Title", api.nvim_get_hl(0, { name = "RevisaReply" }).link)
+H.equal("WarningMsg",
+    api.nvim_get_hl(0, { name = "RevisaOutdated" }).link)
+H.equal("ErrorMsg",
+    api.nvim_get_hl(0, { name = "RevisaUnknown" }).link)
+H.equal("String", api.nvim_get_hl(0, { name = "RevisaWas" }).link)
 
 local messages = H.notifications()
 vim.cmd("Revisa unknown")
@@ -32,4 +45,10 @@ H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))
 vim.cmd("help :Revisa-resolved")
 H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))
 vim.cmd("help :Revisa-send")
+H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))
+vim.cmd("help RevisaOutdated")
+H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))
+vim.cmd("help RevisaUnknown")
+H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))
+vim.cmd("help RevisaWas")
 H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))
