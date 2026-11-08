@@ -55,17 +55,30 @@ local function check_old(win)
         H.equal(filetype, vim.bo[buf].filetype)
     end
     H.equal(env("REVISA_OLD_LINES"), lines(buf))
+    local target = require("revisa.target").of(buf)
     H.equal({
+        kind = "file",
         worktree = vim.env.REVISA_WORKTREE,
-        commit = vim.env.REVISA_COMMIT,
+        cwd = vim.env.REVISA_WORKTREE,
         path = vim.env.REVISA_OLD_PATH,
-    }, vim.b[buf].revisa_old)
+        side = "old",
+        commit = vim.env.REVISA_COMMIT,
+        branch = "feat/x",
+    }, target)
 end
 
 local function check_new(win)
     local buf = api.nvim_win_get_buf(win)
     H.equal(vim.env.REVISA_NEW_NAME, api.nvim_buf_get_name(buf))
     H.equal(env("REVISA_NEW_LINES"), lines(buf))
+    H.equal({
+        kind = "file",
+        worktree = vim.env.REVISA_WORKTREE,
+        cwd = vim.env.REVISA_WORKTREE,
+        path = vim.env.REVISA_PATH,
+        side = "new",
+        branch = "feat/x",
+    }, require("revisa.target").of(buf))
     if vim.env.REVISA_DELETED == "1" then
         H.equal("nofile", vim.bo[buf].buftype)
         H.equal(false, vim.bo[buf].modifiable)
@@ -101,7 +114,10 @@ if case == "deleted" then
             local messages = H.notifications()
             api.nvim_set_current_win(new)
             vim.cmd("Revisa comment")
-            H.error(messages, "revisa: comments require a real file buffer")
+            local editor = H.float()
+            api.nvim_buf_set_lines(editor, 0, -1, false, { "Gone" })
+            vim.cmd("write")
+            H.error(messages, "not found in")
         end
     end
 elseif case == "editable" then

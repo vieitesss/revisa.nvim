@@ -12,6 +12,10 @@ _Avoid_: Annotation, note
 The exact lines a comment was made on, used to find those lines again after the file changes.
 _Avoid_: Line text
 
+**File version**:
+One state of one file under review: the new side at the branch's current text, or a file on the old side at one commit. A comment belongs to one file version, and only a new-side one re-anchors.
+_Avoid_: Revision, snapshot
+
 **Resolved**:
 The state of a comment an agent has finished with, carrying the agent's reply. A rejected fix gets a new comment.
 _Avoid_: Done, closed
@@ -21,11 +25,11 @@ A condition of an open new-side comment whose anchor text can no longer be found
 _Avoid_: Stale, orphaned
 
 **Old side**:
-The version of a file at the base of the changes under review. A deleted line exists only here.
+The file version at the base of the changes under review. A deleted line exists only here.
 _Avoid_: Left side, before
 
 **New side**:
-The current version of a file in the worktree under review.
+The file version at the current text of the file in the worktree under review.
 _Avoid_: Right side, after
 
 **Open**:
@@ -55,3 +59,11 @@ _Avoid_: Target, parent
 **Session changes**:
 Everything that differs between the base and a worktree, including new files git does not track yet.
 _Avoid_: Diff, changeset
+
+**Changes list**:
+A worktree's branch, base and session changes, as one reviewer-facing list. The plugin holds one per changes buffer, as its changes session; revisa rebuilds it from git and never stores it.
+_Avoid_: Diff, changeset
+
+**Review target**:
+What one editor view shows of a project: a changes list, or one file version in a worktree. It decides where comments are drawn and which file version a new comment is stored against.
+_Avoid_: Context, buffer

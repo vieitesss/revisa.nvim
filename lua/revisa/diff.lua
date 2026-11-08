@@ -88,9 +88,22 @@ function M.close()
     end
 end
 
+-- pin stores the review target of one diff buffer, so commenting there
+-- does not ask git where the buffer is.
+local function pin(buf, worktree, branch, path, side, commit)
+    vim.b[buf].revisa_target = {
+        worktree = worktree,
+        branch = branch,
+        path = path,
+        side = side,
+        commit = commit,
+    }
+end
+
 -- open shows one change side by side in a new tab: the content at the
 -- base on the left, the worktree file on the right. Neovim diff mode
--- does the rest. change has worktree, commit, status, path and old_path.
+-- does the rest. change has worktree, branch, commit, status, path and
+-- old_path.
 function M.open(change)
     local oldPath = change.old_path or change.path
     local old = ""
@@ -114,20 +127,19 @@ function M.open(change)
     if change.status == "D" then
         local buf = scratch("revisa://deleted/" .. change.path, "", nil)
         api.nvim_win_set_buf(0, buf)
+        pin(buf, change.worktree, change.branch, change.path, "new")
         newWin = api.nvim_get_current_win()
     else
         vim.cmd.edit(vim.fn.fnameescape(file))
+        pin(api.nvim_get_current_buf(), change.worktree, change.branch,
+            change.path, "new")
         newWin = api.nvim_get_current_win()
     end
     vim.cmd.vsplit()
     local oldWin = api.nvim_get_current_win()
     local buf = scratch(name(change.commit, oldPath), old, oldPath)
     api.nvim_win_set_buf(oldWin, buf)
-    vim.b[buf].revisa_old = {
-        worktree = change.worktree,
-        commit = change.commit,
-        path = oldPath,
-    }
+    pin(buf, change.worktree, change.branch, oldPath, "old", change.commit)
     vim.keymap.set("n", "q", M.close,
         { buffer = buf, desc = "revisa: close the diff" })
     vim.cmd.diffthis()

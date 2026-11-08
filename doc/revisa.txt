@@ -41,6 +41,11 @@ COMMANDS                                                      *revisa-commands*
     and buffers without a real file on disk are refused without storing a
     comment. Another diff tool's real file buffer works without an adapter.
 
+    In the diff view of |:Revisa-review|, the left side comments on the old
+    side: the comment belongs to the branch under review and is read at the
+    base commit. The right side of a deleted file stores nothing and reports
+    that the path is not found in the worktree.
+
 :Revisa refresh                                               *:Revisa-refresh*
     Reload comments for the current file.
 
@@ -57,10 +62,13 @@ COMMANDS                                                      *revisa-commands*
     worktree of the project.
 
     The list opens in a new split, in a scratch buffer named
-    revisa://changes/<branch>. Its header shows the worktree path, the
-    branch and the base: the merge-base with the project's default branch,
-    or the worktree's HEAD when it is on that branch. Each entry is one
-    line, a status then a path, with old -> new after a rename: >
+    revisa://changes/<branch>. A detached worktree has no branch, so its
+    buffer is named revisa://changes/detached-<sha7>-<worktree name>, and
+    two detached worktrees never share a buffer. Its header shows the
+    worktree path, the branch and the base: the merge-base with the
+    project's default branch, or the worktree's HEAD when it is on that
+    branch. Each entry is one line, a status then a path, with old -> new
+    after a rename: >
 
         worktree /repo/linked
         branch feat/x
@@ -97,6 +105,12 @@ COMMANDS                                                      *revisa-commands*
     Neovim render the comparison. A file with a NUL byte in the first
     8000 bytes of either side is reported as "revisa: <path> is binary"
     and does not open. q on the left side closes the diff tab.
+
+    The CLI of a review runs in the worktree of the current buffer's
+    review target, so :Revisa review works from any buffer of the project
+    even when Neovim's working directory is outside it. An explicit
+    [WORKTREE] only picks the worktree to list; it does not change where
+    the CLI runs.
 
     The keys are buffer-local. require("revisa").review(worktree) does the
     same as the command.

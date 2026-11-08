@@ -2,6 +2,7 @@ local M = {}
 local api = vim.api
 local cli = require("revisa.cli")
 local diff = require("revisa.diff")
+local target = require("revisa.target")
 
 local function decode(context, args)
     local output = cli.run(context, args)
@@ -23,6 +24,16 @@ local function label(branch)
     return branch
 end
 
+-- runDir is where a review runs the CLI: the worktree of the current
+-- buffer's target, else the working directory.
+local function runDir()
+    local found = target.of(api.nvim_get_current_buf())
+    if found then
+        return found.cwd
+    end
+    return vim.fn.getcwd()
+end
+
 -- fetchChanges reads one worktree's session changes through the CLI.
 -- request is a worktree path or branch, empty for the worktree of the
 -- current directory.
@@ -31,13 +42,17 @@ local function fetchChanges(request)
     if request and request ~= "" then
         vim.list_extend(args, { "--worktree", request })
     end
-    return decode({ cwd = vim.fn.getcwd() }, args)
+    return decode({ cwd = runDir() }, args)
 end
 
+-- name is the buffer name of one changes list. A detached worktree has
+-- no branch, so its head and worktree name it, and two detached
+-- worktrees cannot delete each other's buffer.
 local function name(data)
     local branch = data.branch
     if branch == nil or branch == "" then
-        branch = "detached"
+        return "revisa://changes/detached-" .. data.head:sub(1, 7) ..
+            "-" .. vim.fs.basename(data.worktree)
     end
     return "revisa://changes/" .. branch
 end
@@ -64,26 +79,33 @@ local function build(data)
 end
 
 -- draw replaces the buffer contents, keeping the cursor on its line.
+-- The session keys its entries by buffer line, so a header line has no
+-- entry and nothing may iterate the table as a list.
 local function draw(buf, data)
     local lines, entries = build(data)
     local cursor = api.nvim_win_get_cursor(0)[1]
     vim.bo[buf].modifiable = true
     api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.bo[buf].modifiable = false
-    vim.b[buf].revisa_changes = entries
-    vim.b[buf].revisa_worktree = data.worktree
-    vim.b[buf].revisa_base = data.base
+    vim.b[buf].revisa_session = {
+        worktree = data.worktree,
+        branch = data.branch,
+        head = data.head,
+        base = data.base,
+        default_branch = data.default_branch,
+        entries = entries,
+    }
     api.nvim_win_set_cursor(0, { math.min(cursor, #lines), 0 })
 end
 
 -- entry returns the change on line of buf, or nil on a header line.
 -- The diff view reads the entry under the cursor through this.
 function M.entry(buf, line)
-    local entries = vim.b[buf].revisa_changes
-    if type(entries) ~= "table" then
+    local session = vim.b[buf].revisa_session
+    if type(session) ~= "table" then
         return nil
     end
-    local change = entries[line or api.nvim_win_get_cursor(0)[1]]
+    local change = session.entries[line or api.nvim_win_get_cursor(0)[1]]
     if type(change) ~= "table" then
         return nil
     end
@@ -95,7 +117,7 @@ local function openEntry(buf)
     if not change then
         return
     end
-    local worktree = vim.b[buf].revisa_worktree
+    local worktree = vim.b[buf].revisa_session.worktree
     if change.status == "D" then
         cli.error("revisa: " .. change.path .. " is deleted in " .. worktree)
         return
@@ -115,9 +137,11 @@ local function openDiff(buf)
     if not change then
         return
     end
+    local session = vim.b[buf].revisa_session
     diff.open({
-        worktree = vim.b[buf].revisa_worktree,
-        commit = vim.b[buf].revisa_base,
+        worktree = session.worktree,
+        branch = session.branch,
+        commit = session.base,
         status = change.status,
         path = change.path,
         old_path = change.old_path,
@@ -125,7 +149,11 @@ local function openDiff(buf)
 end
 
 local function reload(buf)
-    local data = fetchChanges(vim.b[buf].revisa_worktree)
+    local session = vim.b[buf].revisa_session
+    if type(session) ~= "table" then
+        return
+    end
+    local data = fetchChanges(session.worktree)
     if data then
         draw(buf, data)
     end
@@ -177,7 +205,7 @@ function M.open(request)
 end
 
 function M.pick()
-    local worktrees = decode({ cwd = vim.fn.getcwd() },
+    local worktrees = decode({ cwd = runDir() },
         { "worktrees", "--json" })
     if not worktrees then
         return

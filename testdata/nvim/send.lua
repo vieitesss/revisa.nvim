@@ -81,29 +81,9 @@ end
 -- check_list opens the changes buffer of REVISA_TARGET.
 local function check_list()
     require("revisa").review(vim.env.REVISA_TARGET)
-    assert(vim.b[api.nvim_get_current_buf()].revisa_worktree,
-        "not the changes buffer")
-end
-
--- check_diff opens the diff of src/a.lua in the changes buffer.
-local function check_diff()
-    check_list()
-    local buf = api.nvim_get_current_buf()
-    local change
-    for _, candidate in ipairs(vim.b[buf].revisa_changes) do
-        if candidate.path == "src/a.lua" then
-            change = candidate
-        end
-    end
-    assert(change, "src/a.lua is not in the changes list")
-    require("revisa.diff").open({
-        worktree = vim.b[buf].revisa_worktree,
-        commit = vim.b[buf].revisa_base,
-        status = change.status,
-        path = change.path,
-        old_path = change.old_path,
-    })
-    assert(vim.b[api.nvim_get_current_buf()].revisa_old, "not the old side")
+    local target = require("revisa.target").of(api.nvim_get_current_buf())
+    H.equal("changes", target.kind)
+    H.equal("feat/x", target.branch)
 end
 
 if case == "unavailable" then
@@ -145,8 +125,8 @@ elseif case == "diff" then
     return function()
         H.keys("<CR>")
         return function()
-            assert(vim.b[api.nvim_get_current_buf()].revisa_old,
-                "not the old side")
+            H.equal("old",
+                require("revisa.target").of(api.nvim_get_current_buf()).side)
             send()
             check_offers(1, 1)
             check_messages()

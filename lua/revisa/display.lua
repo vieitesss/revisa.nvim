@@ -47,12 +47,19 @@ local function body_lines(comment)
     return lines
 end
 
-function M.draw(buf, path, comments, show_resolved)
+-- draw shows the comments of the file version target names. Only a
+-- new-side target draws them: an old-side one has none to show.
+function M.draw(buf, target, comments, show_resolved)
     api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
+    if target.side ~= "new" then
+        return
+    end
     drawn[buf] = true
     local count = api.nvim_buf_line_count(buf)
     for _, comment in ipairs(comments) do
-        if comment.path == path and shown(comment, count, show_resolved) then
+        if comment.path == target.path
+            and shown(comment, count, show_resolved)
+        then
             local sign, sign_group = ">", "RevisaSign"
             if comment.status == "resolved" then
                 sign, sign_group = "✓", "RevisaResolved"

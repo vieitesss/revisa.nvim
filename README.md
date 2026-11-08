@@ -64,7 +64,9 @@ worktree is a path or a branch. The working directory is kept, and
 
 Inside Neovim, `:Revisa review [WORKTREE]` does the same. Without a
 worktree it uses `vim.ui.select` over the project's worktrees, so no
-picker plugin is needed.
+picker plugin is needed. It runs the CLI in the worktree of the current
+buffer's review target, so it also works from a buffer when Neovim's
+working directory is outside the project.
 
 The list shows that worktree's commits since the merge-base with the
 project's default branch, plus uncommitted changes and untracked files.
@@ -82,13 +84,13 @@ Comments on the opened file appear as usual.
 
 The diff view opens in a new tab, with the content at the base on the
 left and the real file on the right, both in Neovim's diff mode. The
-right side stays editable, so comments work there like on any file. A
-renamed entry reads its old path on the left, an added or untracked one
-has an empty left side, and a deleted one has an empty right side.
-Revisa computes no diff: git provides the base content and Neovim
-renders the comparison. `q` on the left side closes the tab. A file
-with a NUL byte in its first 8000 bytes is reported as binary instead
-of opened.
+right side stays editable, so comments work there like on any file, and
+the left side comments on the old side at the base commit. A renamed
+entry reads its old path on the left, an added or untracked one has an
+empty left side, and a deleted one has an empty right side. Revisa
+computes no diff: git provides the base content and Neovim renders the
+comparison. `q` on the left side closes the tab. A file with a NUL byte
+in its first 8000 bytes is reported as binary instead of opened.
 
 The CLI exposes the same data for scripts and agents:
 

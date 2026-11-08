@@ -26,6 +26,7 @@ type changeJSON struct {
 type changesJSON struct {
 	Worktree      string       `json:"worktree"`
 	Branch        string       `json:"branch"`
+	Head          string       `json:"head"`
 	DefaultBranch string       `json:"default_branch"`
 	Base          string       `json:"base"`
 	Entries       []changeJSON `json:"entries"`
@@ -202,6 +203,14 @@ func TestChangesListsEveryKindOfSessionChange(t *testing.T) {
 			t.Errorf("entry %d: got %+v, want %+v",
 				i, got.Entries[i], want[i])
 		}
+	}
+}
+
+func TestChangesReportsTheHeadOfTheWorktree(t *testing.T) {
+	p, linked := changesProject(t)
+	got := changes(t, p.worktrees[0], "--worktree", linked)
+	if want := git(t, linked, "rev-parse", "HEAD"); got.Head != want {
+		t.Errorf("head %q, want %q", got.Head, want)
 	}
 }
 

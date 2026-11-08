@@ -1,19 +1,33 @@
 local M = {}
 local api = vim.api
-local buffer = require("revisa.buffer")
 local cli = require("revisa.cli")
 local display = require("revisa.display")
+local target = require("revisa.target")
 
 local show_resolved = false
 
+-- addArgs are the flags that name the file version a comment is made on.
+-- The old side always names its branch and commit; a new side names its
+-- branch when the target has one, and lets the CLI infer it otherwise.
+local function addArgs(found, lines)
+    local args = { "--path", found.path, "--lines", lines }
+    if found.side == "old" then
+        vim.list_extend(args, { "--side", "old",
+            "--branch", found.branch, "--commit", found.commit })
+    elseif found.branch ~= nil and found.branch ~= "" then
+        vim.list_extend(args, { "--branch", found.branch })
+    end
+    return args
+end
+
 function M.refresh(buf)
     buf = buf or api.nvim_get_current_buf()
-    local context, err = buffer.context(buf)
-    if not context then
+    local found, err = target.file(target.of(buf))
+    if not found then
         cli.error(err)
         return
     end
-    local output = cli.run(context, { "list", "--json" })
+    local output = cli.run({ cwd = found.cwd }, { "list", "--json" })
     if not output then
         return
     end
@@ -22,7 +36,7 @@ function M.refresh(buf)
         cli.error("revisa: invalid JSON from CLI: " .. tostring(comments))
         return
     end
-    display.draw(buf, context.path, comments, show_resolved)
+    display.draw(buf, found, comments, show_resolved)
 end
 
 -- toggle_resolved shows or hides resolved comments in every loaded buffer
@@ -36,8 +50,8 @@ end
 
 function M.comment(first, last)
     local buf = api.nvim_get_current_buf()
-    local context, err = buffer.context(buf)
-    if not context then
+    local found, err = target.file(target.of(buf))
+    if not found then
         cli.error(err)
         return
     end
@@ -50,10 +64,10 @@ function M.comment(first, last)
             cli.error("save the buffer before commenting")
             return false
         end
-        local result = cli.run(context, {
-            "add", "--path", context.path,
-            "--lines", first .. "-" .. last, "--body", body,
-        })
+        local args = { "add" }
+        vim.list_extend(args, addArgs(found, first .. "-" .. last))
+        vim.list_extend(args, { "--body", body })
+        local result = cli.run({ cwd = found.cwd }, args)
         if result == nil then
             return false
         end

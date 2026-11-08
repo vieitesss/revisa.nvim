@@ -36,6 +36,7 @@ func (c diffCase) env(t *testing.T, linked string) []string {
 		"REVISA_COMMIT=" + base,
 		"REVISA_OLD_NAME=" + oldName,
 		"REVISA_OLD_PATH=" + c.oldPath,
+		"REVISA_PATH=" + c.path,
 		"REVISA_OLD_LINES=" + jsonLines(t, c.old),
 		"REVISA_FILE_TYPE=" + c.fileType,
 		"REVISA_NEW_NAME=" + newName,

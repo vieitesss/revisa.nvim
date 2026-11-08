@@ -101,6 +101,7 @@ type changesEntry struct {
 type changesOutput struct {
 	Worktree      string         `json:"worktree"`
 	Branch        string         `json:"branch"`
+	Head          string         `json:"head"`
 	DefaultBranch string         `json:"default_branch"`
 	Base          string         `json:"base"`
 	Entries       []changesEntry `json:"entries"`
@@ -150,6 +151,7 @@ func changes(args []string, stdout, stderr io.Writer) error {
 	out := changesOutput{
 		Worktree:      wt.Path,
 		Branch:        wt.Branch,
+		Head:          wt.Head,
 		DefaultBranch: defaultBranch,
 		Base:          base,
 		Entries:       []changesEntry{},

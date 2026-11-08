@@ -1,7 +1,7 @@
 local M = {}
 local api = vim.api
-local buffer = require("revisa.buffer")
 local cli = require("revisa.cli")
+local target = require("revisa.target")
 
 local settings = { notify = "none" }
 local allowed = { none = true, recado = true, rex = true }
@@ -25,10 +25,9 @@ function M.setup(options)
     settings.notify = notify
 end
 
--- decode runs one CLI command in the working directory and parses its
--- JSON output.
-local function decode(args)
-    local output = cli.run({ cwd = vim.fn.getcwd() }, args)
+-- decode runs one CLI command in dir and parses its JSON output.
+local function decode(dir, args)
+    local output = cli.run({ cwd = dir }, args)
     if not output then
         return nil
     end
@@ -38,27 +37,6 @@ local function decode(args)
         return nil
     end
     return data
-end
-
--- request names the worktree to notify: the argument, the worktree of
--- the changes buffer or diff view, else the current file's git root.
-local function request(argument)
-    if argument and argument ~= "" then
-        return argument
-    end
-    local buf = api.nvim_get_current_buf()
-    local old = vim.b[buf].revisa_old
-    if type(old) == "table" and old.worktree then
-        return old.worktree
-    end
-    if vim.b[buf].revisa_worktree then
-        return vim.b[buf].revisa_worktree
-    end
-    local context = buffer.context(buf)
-    if context then
-        return context.cwd
-    end
-    return nil
 end
 
 -- quote wraps a branch name in single quotes for a shell.
@@ -245,7 +223,7 @@ local function deliver(agent, branch, agents, worktree)
 end
 
 -- M.send tells the agent of a worktree that comments are waiting there.
-function M.send(worktree)
+function M.send(request)
     if settings.notify ~= "recado" then
         cli.error('revisa: :Revisa send needs setup({ notify = "recado" })')
         return
@@ -254,13 +232,18 @@ function M.send(worktree)
         cli.error("revisa: recado is not on PATH")
         return
     end
-    local target = request(worktree)
-    if not target then
+    local found = target.of(api.nvim_get_current_buf())
+    local worktreePath = found and found.worktree
+    if request and request ~= "" then
+        worktreePath = request
+    end
+    if not worktreePath then
         cli.error("revisa: :Revisa send needs a worktree, pass one")
         return
     end
-    local args = { "changes", "--json", "--worktree", target }
-    local data = decode(args)
+    local dir = found and found.cwd or vim.fn.getcwd()
+    local args = { "changes", "--json", "--worktree", worktreePath }
+    local data = decode(dir, args)
     if not data then
         return
     end
