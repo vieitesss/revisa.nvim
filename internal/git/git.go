@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -70,12 +69,6 @@ func CurrentBranch(dir string) (string, error) {
 	return strings.TrimSpace(out), err
 }
 
-// Head returns the full commit id of HEAD in dir.
-func Head(dir string) (string, error) {
-	out, err := run(dir, "rev-parse", "HEAD")
-	return strings.TrimSpace(out), err
-}
-
 // ResolveCommit returns the full commit id rev names.
 func ResolveCommit(dir, rev string) (string, error) {
 	out, err := run(dir, "rev-parse", "--verify", "--quiet",
@@ -93,42 +86,4 @@ func Show(dir, commit, path string) (string, error) {
 		return "", fmt.Errorf("%s not found at %s", path, commit)
 	}
 	return out, nil
-}
-
-// WorktreeOf returns the root of the worktree where branch is checked
-// out, or "" when no worktree has it. It prefers the worktree containing
-// dir, otherwise returning the first match in git's worktree list.
-func WorktreeOf(dir, branch string) (string, error) {
-	out, err := run(dir, "worktree", "list", "--porcelain", "-z")
-	if err != nil {
-		return "", err
-	}
-	root, err := TopLevel(dir)
-	if err != nil {
-		return "", err
-	}
-	if root != "" {
-		root, err = filepath.EvalSymlinks(root)
-		if err != nil {
-			return "", err
-		}
-	}
-	var path, first string
-	for field := range strings.SplitSeq(out, "\x00") {
-		if p, ok := strings.CutPrefix(field, "worktree "); ok {
-			path = p
-		}
-		if field == "branch refs/heads/"+branch {
-			if first == "" {
-				first = path
-			}
-			if root != "" {
-				resolved, err := filepath.EvalSymlinks(path)
-				if err == nil && resolved == root {
-					return path, nil
-				}
-			}
-		}
-	}
-	return first, nil
 }

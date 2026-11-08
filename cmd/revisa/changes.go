@@ -7,57 +7,26 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/vieitesss/revisa.nvim/internal/git"
 	"github.com/vieitesss/revisa.nvim/internal/project"
 )
 
-// repository is the git project the working directory belongs to.
-type repository struct {
-	dir string // Where git commands run.
-	cwd string // The working directory, with symlinks resolved.
-}
-
-func findRepository() (repository, error) {
+// gitDir returns the directory git commands run in for the working
+// directory, which must be inside a git repository.
+func gitDir() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
-		return repository{}, err
+		return "", err
 	}
 	p, err := project.Find(wd)
 	if err != nil {
-		return repository{}, err
+		return "", err
 	}
 	if !p.Git {
-		return repository{}, project.ErrNeedsGit
+		return "", project.ErrNeedsGit
 	}
-	cwd, err := filepath.EvalSymlinks(wd)
-	if err != nil {
-		return repository{}, err
-	}
-	return repository{dir: wd, cwd: cwd}, nil
-}
-
-// contains reports whether path is the working directory or holds it.
-func (r repository) contains(path string) bool {
-	resolved, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		resolved = path
-	}
-	rel, err := filepath.Rel(resolved, r.cwd)
-	return err == nil && rel != ".." &&
-		!strings.HasPrefix(rel, ".."+string(filepath.Separator))
-}
-
-// samePath reports whether two paths name the same directory, resolving
-// symlinks when both exist.
-func samePath(a, b string) bool {
-	if a == b {
-		return true
-	}
-	resolvedA, errA := filepath.EvalSymlinks(a)
-	resolvedB, errB := filepath.EvalSymlinks(b)
-	return errA == nil && errB == nil && resolvedA == resolvedB
+	return wd, nil
 }
 
 func writeJSON(w io.Writer, value any) error {
@@ -85,14 +54,15 @@ func worktrees(args []string, stdout, stderr io.Writer) error {
 		return usageError(fmt.Sprintf(
 			"worktrees: unexpected argument %q", positional[0]))
 	}
-	repo, err := findRepository()
+	dir, err := gitDir()
 	if err != nil {
 		return fmt.Errorf("worktrees: %w", err)
 	}
-	list, err := git.Worktrees(repo.dir)
+	list, err := git.Worktrees(dir)
 	if err != nil {
 		return fmt.Errorf("worktrees: %w", err)
 	}
+	current, inWorktree := git.At(list, dir)
 	entries := []worktreeEntry{}
 	for _, wt := range list {
 		if wt.Bare {
@@ -102,7 +72,7 @@ func worktrees(args []string, stdout, stderr io.Writer) error {
 			Path:    wt.Path,
 			Branch:  wt.Branch,
 			Head:    wt.Head,
-			Current: repo.contains(wt.Path),
+			Current: inWorktree && wt.Path == current.Path,
 		})
 	}
 	if *asJSON {
@@ -150,19 +120,19 @@ func changes(args []string, stdout, stderr io.Writer) error {
 		return usageError(fmt.Sprintf(
 			"changes: unexpected argument %q", positional[0]))
 	}
-	repo, err := findRepository()
+	dir, err := gitDir()
 	if err != nil {
 		return fmt.Errorf("changes: %w", err)
 	}
-	list, err := git.Worktrees(repo.dir)
+	list, err := git.Worktrees(dir)
 	if err != nil {
 		return fmt.Errorf("changes: %w", err)
 	}
-	wt, err := pickWorktree(repo, list, *worktree)
+	wt, err := pickWorktree(dir, list, *worktree)
 	if err != nil {
 		return err
 	}
-	defaultBranch, err := git.DefaultBranch(repo.dir)
+	defaultBranch, err := git.DefaultBranch(dir)
 	if err != nil {
 		return fmt.Errorf("changes: %w", err)
 	}
@@ -210,38 +180,26 @@ func changes(args []string, stdout, stderr io.Writer) error {
 
 // pickWorktree returns the worktree the target names, or the one that
 // holds the working directory when target is empty.
-func pickWorktree(repo repository, list []git.Worktree, target string) (
+func pickWorktree(dir string, list []git.Worktree, target string) (
 	git.Worktree, error) {
-	worktrees := []git.Worktree{}
-	for _, wt := range list {
-		if !wt.Bare {
-			worktrees = append(worktrees, wt)
-		}
-	}
 	if target == "" {
-		for _, wt := range worktrees {
-			if repo.contains(wt.Path) {
-				return wt, nil
-			}
+		if wt, ok := git.At(list, dir); ok {
+			return wt, nil
 		}
 		return git.Worktree{}, fmt.Errorf(
 			"changes: the working directory is in no worktree")
 	}
 	paths := []string{target}
 	if !filepath.IsAbs(target) {
-		paths = append(paths, filepath.Join(repo.dir, target))
+		paths = append(paths, filepath.Join(dir, target))
 	}
-	for _, wt := range worktrees {
-		for _, path := range paths {
-			if samePath(wt.Path, path) {
-				return wt, nil
-			}
-		}
-	}
-	for _, wt := range worktrees {
-		if target != "" && wt.Branch == target {
+	for _, path := range paths {
+		if wt, ok := git.Named(list, path, ""); ok {
 			return wt, nil
 		}
+	}
+	if wt, ok := git.Named(list, "", target); ok {
+		return wt, nil
 	}
 	return git.Worktree{}, fmt.Errorf(
 		"changes: no worktree with path or branch %q", target)

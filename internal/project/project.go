@@ -60,15 +60,21 @@ func Find(wd string) (Project, error) {
 	}, nil
 }
 
+// Dir returns where the project keeps its files and where its git
+// commands run: the worktree root, or the git common directory in a bare
+// repository.
+func (p Project) Dir() string {
+	if p.Root != "" {
+		return p.Root
+	}
+	return filepath.Dir(p.Store)
+}
+
 // Branch returns the current branch, or "" on a detached HEAD.
 // Outside git it fails because branches need a git repository.
 func (p Project) Branch() (string, error) {
 	if !p.Git {
 		return "", ErrNeedsGit
 	}
-	dir := p.Root
-	if dir == "" {
-		dir = filepath.Dir(p.Store)
-	}
-	return git.CurrentBranch(dir)
+	return git.CurrentBranch(p.Dir())
 }

@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -43,6 +44,68 @@ func Worktrees(dir string) ([]Worktree, error) {
 		}
 	}
 	return worktrees, nil
+}
+
+// At returns the worktree that holds dir: the one whose path is dir or
+// an ancestor of it, both with symlinks resolved. A bare entry holds no
+// directory, so it never matches.
+func At(list []Worktree, dir string) (Worktree, bool) {
+	dir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return Worktree{}, false
+	}
+	for _, wt := range list {
+		if wt.Bare {
+			continue
+		}
+		root, err := filepath.EvalSymlinks(wt.Path)
+		if err != nil {
+			continue
+		}
+		if holds(root, dir) {
+			return wt, true
+		}
+	}
+	return Worktree{}, false
+}
+
+// holds reports whether dir is root or inside it.
+func holds(root, dir string) bool {
+	rel, err := filepath.Rel(root, dir)
+	return err == nil && rel != ".." &&
+		!strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// Named returns the worktree at path, else the first one that has branch
+// checked out. An empty path or branch skips that lookup. This is an
+// exact path, so a directory inside a worktree does not match.
+func Named(list []Worktree, path, branch string) (Worktree, bool) {
+	if path != "" {
+		for _, wt := range list {
+			if !wt.Bare && sameDir(wt.Path, path) {
+				return wt, true
+			}
+		}
+	}
+	if branch != "" {
+		for _, wt := range list {
+			if !wt.Bare && wt.Branch == branch {
+				return wt, true
+			}
+		}
+	}
+	return Worktree{}, false
+}
+
+// sameDir reports whether two paths name the same directory, resolving
+// symlinks when both exist.
+func sameDir(a, b string) bool {
+	if a == b {
+		return true
+	}
+	resolvedA, errA := filepath.EvalSymlinks(a)
+	resolvedB, errB := filepath.EvalSymlinks(b)
+	return errA == nil && errB == nil && resolvedA == resolvedB
 }
 
 // DefaultBranch returns the project's default branch, trying the remote

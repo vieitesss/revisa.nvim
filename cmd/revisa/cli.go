@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/vieitesss/revisa.nvim/internal/anchor"
-	"github.com/vieitesss/revisa.nvim/internal/git"
 	"github.com/vieitesss/revisa.nvim/internal/project"
 	"github.com/vieitesss/revisa.nvim/internal/store"
 )
@@ -169,7 +168,10 @@ func list(args []string, stdout, stderr io.Writer) error {
 	}
 
 	matched := []listed{}
-	source := anchorSource(p)
+	src, err := anchorSource(p)
+	if err != nil {
+		return err
+	}
 	for _, c := range all {
 		if p.Git && c.Branch != *branch {
 			continue
@@ -177,7 +179,7 @@ func list(args []string, stdout, stderr io.Writer) error {
 		if *status != "" && c.Status != *status {
 			continue
 		}
-		located, err := anchor.Locate(c, source)
+		located, err := anchor.Locate(c, src)
 		if err != nil {
 			return err
 		}
@@ -244,59 +246,6 @@ func writePlain(w io.Writer, l listed) {
 	}
 }
 
-// anchorSource returns the reader of the branch's current files.
-func anchorSource(p project.Project) anchor.Source {
-	if !p.Git {
-		return dirSource(p.Root)
-	}
-	dir := p.Root
-	if dir == "" {
-		dir = filepath.Dir(p.Store)
-	}
-	return gitSource(dir)
-}
-
-// gitSource reads a branch's files from a worktree that has it checked
-// out, or from the branch's tip when no worktree does.
-type gitSource string
-
-func (g gitSource) Read(branch, path string) (string, error) {
-	worktree, err := git.WorktreeOf(string(g), branch)
-	if err != nil {
-		return "", err
-	}
-	if worktree != "" {
-		return readCurrent(worktree, path)
-	}
-	if _, err := git.ResolveCommit(string(g),
-		"refs/heads/"+branch); err != nil {
-		return "", anchor.ErrNoBranch
-	}
-	content, err := git.Show(string(g), branch, path)
-	if err != nil {
-		return "", anchor.ErrNoFile
-	}
-	return content, nil
-}
-
-// dirSource reads the files under a project root outside git.
-type dirSource string
-
-func (d dirSource) Read(_, path string) (string, error) {
-	return readCurrent(string(d), path)
-}
-
-func readCurrent(dir, path string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(dir, path))
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", anchor.ErrNoFile
-	}
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
 func add(args []string, stdout, stderr io.Writer) error {
 	fl := flag.NewFlagSet("add", flag.ContinueOnError)
 	fl.SetOutput(stderr)
@@ -346,25 +295,25 @@ func add(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	var content string
 	switch *side {
 	case "new":
 		if *commit != "" {
 			return usageError("add: --commit only applies to --side old")
 		}
-		content, *commit, err = readNewSide(p, *branch, *path)
 	case "old":
 		if *commit == "" {
 			return usageError("add: --side old requires --commit")
 		}
-		content, *commit, err = readOldSide(p, *commit, *path)
 	default:
 		return usageError(fmt.Sprintf(
 			"add: --side must be new or old, got %q", *side))
 	}
+	content, readCommit, err := addContent(p, *side, *branch, *commit,
+		*path)
 	if err != nil {
-		return err
+		return fmt.Errorf("add: %w", err)
 	}
+	*commit = readCommit
 	fileLines := strings.Split(strings.TrimSuffix(content, "\n"), "\n")
 	if content == "" || end > len(fileLines) {
 		return fmt.Errorf("add: lines %s are past the end of %s (%d lines)",
@@ -383,7 +332,10 @@ func add(args []string, stdout, stderr io.Writer) error {
 		Body:       *body,
 		Status:     "open",
 	}
-	if err := store.Save(p.Store, c); err != nil {
+	if err := store.SaveNew(p.Store, c); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return fmt.Errorf("add: comment %s already exists", c.ID)
+		}
 		return err
 	}
 	fmt.Fprintln(stdout, c.ID)
@@ -417,52 +369,6 @@ func parseLines(s string) (start, end int, err error) {
 			"add: --lines must be N or N-M with 1 <= N <= M, got %q", s))
 	}
 	return start, end, nil
-}
-
-func readNewSide(p project.Project, branch, path string) (
-	content, commit string, err error) {
-	worktree := p.Root
-	if p.Git {
-		if worktree == "" {
-			worktree = filepath.Dir(p.Store)
-		}
-		worktree, err = git.WorktreeOf(worktree, branch)
-		if err != nil {
-			return "", "", err
-		}
-		if worktree == "" {
-			return "", "", fmt.Errorf(
-				"add: branch %q is not checked out in any worktree", branch)
-		}
-	}
-	data, err := os.ReadFile(filepath.Join(worktree, path))
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", "", fmt.Errorf("add: %s not found in %s", path, worktree)
-	}
-	if err != nil {
-		return "", "", err
-	}
-	if p.Git {
-		commit, err = git.Head(worktree)
-	}
-	return string(data), commit, err
-}
-
-func readOldSide(p project.Project, rev, path string) (
-	content, commit string, err error) {
-	dir := p.Root
-	if dir == "" {
-		dir = filepath.Dir(p.Store)
-	}
-	commit, err = git.ResolveCommit(dir, rev)
-	if err != nil {
-		return "", "", fmt.Errorf("add: %w", err)
-	}
-	content, err = git.Show(dir, commit, path)
-	if err != nil {
-		return "", "", fmt.Errorf("add: %w", err)
-	}
-	return content, commit, nil
 }
 
 func resolve(args []string, stdout, stderr io.Writer) error {
