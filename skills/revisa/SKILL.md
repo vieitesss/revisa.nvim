@@ -86,13 +86,14 @@ Done when `revisa list --status open` prints only the comments you
 asked the user about. Then tell the user which comments you resolved,
 with each reply, and which stay open and why.
 
-## When Recado says comments are waiting
+## When a reviewer says comments are waiting
 
-A reviewer can send you a pointer through Recado instead of repeating it
-in your conversation. That message holds no comment content, only the
-branch. Do not answer it with `recado reply`: the reviewer reads answers
-on the comment. Run `revisa list --branch '<branch>' --status open` for
-the branch it names, then resolve each comment as in Steps above.
+A reviewer can send you a pointer through Recado, or type it into your
+Rex pane, instead of repeating it in your conversation. That message
+holds no comment content, only the branch. Do not answer it with
+`recado reply`: the reviewer reads answers on the comment. Run
+`revisa list --branch '<branch>' --status open` for the branch it names,
+then resolve each comment as in Steps above.
 
 ## Seeing the session changes
 

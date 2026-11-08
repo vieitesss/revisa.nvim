@@ -203,12 +203,7 @@ func TestBufferSendUnavailable(t *testing.T) {
 		"notify none": {
 			setting: "none",
 			stub:    true,
-			want:    `setup({ notify = "recado" })`,
-		},
-		"notify rex": {
-			setting: "rex",
-			stub:    true,
-			want:    `setup({ notify = "recado" })`,
+			want:    `setup({ notify = "recado" | "rex" })`,
 		},
 		"recado missing": {
 			setting: "recado",
@@ -241,7 +236,7 @@ func TestBufferSendValidatesTheSetting(t *testing.T) {
 	sendCase(t, linked, stub,
 		"REVISA_CASE=invalid",
 		"REVISA_SETTING=bogus",
-		"REVISA_ERROR="+`setup({ notify = "recado" })`)
+		"REVISA_ERROR="+`setup({ notify = "recado" | "rex" })`)
 	assertNoSend(t, stub)
 }
 

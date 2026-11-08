@@ -21,6 +21,10 @@ The plugin uses the revisa CLI. It looks for an executable named revisa on PATH,
 then for bin/revisa inside the plugin directory. If neither exists, an error
 names both locations. The CLI is the only code that reads or writes comments.
 
+The Rex features, |:Revisa-beside| and |:Revisa-send| with notify = "rex",
+need REX_SESSION set and rex on PATH. Otherwise they report that and do
+nothing.
+
 The worktree picker uses |vim.ui.select|. It needs no picker plugin.
 
 ==============================================================================
@@ -115,21 +119,56 @@ COMMANDS                                                      *revisa-commands*
     The keys are buffer-local. require("revisa").review(worktree) does the
     same as the command.
 
+:Revisa beside [WORKTREE]                                   *:Revisa-beside*
+    Open the review in a new split beside an agent pane, through Rex. It
+    needs REX_SESSION set and rex on PATH; without either, it reports
+    "revisa: rex needs REX_SESSION set and rex on PATH" and opens
+    nothing.
+
+    Without [WORKTREE], pick a worktree with |vim.ui.select|, as for
+    |:Revisa-review|. [WORKTREE] is a worktree path, and naming it skips
+    that picker.
+
+    Then every pane of the Rex session is offered with |vim.ui.select|,
+    except the one Neovim runs in. Each entry shows the block id, the pane
+    label and the directory of the pane's program. The one pane whose
+    program works in the chosen worktree is offered first, marked as the
+    match. The pick is always explicit.
+
+    The picked pane is split to the right. The new pane runs
+    "nvim +Revisa review <worktree>" with its working directory set to
+    that worktree, so the review opens where the agent works.
+
+    Block ids are read from rex block ls --json on every call and never
+    stored: they expire with the pane. No key is mapped.
+
+    require("revisa").beside(worktree) does the same as the command.
+
 :Revisa send [WORKTREE]                                         *:Revisa-send*
-    Tell a live agent that comments are waiting on a branch, through
-    Recado. It needs notify = "recado" in |revisa-setup|; without it, or
-    when recado is not on PATH, the command reports why and sends nothing.
+    Tell an agent that comments are waiting on a branch. It needs
+    notify = "recado" or notify = "rex" in |revisa-setup|. Without it the
+    command says which settings it needs; a notifier that is not
+    available reports why and sends nothing.
 
     [WORKTREE] is a path or a branch, as for |:Revisa-review|. Without it
     the worktree is the changes buffer's, the diff view's, or the current
     file's git worktree. The branch of that worktree goes in the message.
 
-    Only live agents on this machine are offered: remote agents, and
-    Codex, which cannot receive these messages, are dropped. The one
-    agent whose working directory resolves to a worktree root equal to
-    the worktree's is offered first, marked as the match. No match,
-    several matches or an unknown working directory means no
+    With notify = "recado", only live agents on this machine are offered:
+    remote agents, and Codex, which cannot receive these messages, are
+    dropped. The one agent whose working directory resolves to a worktree
+    root equal to the worktree's is offered first, marked as the match.
+    No match, several matches or an unknown working directory means no
     preselection. OpenCode's reported working directory is not used.
+
+    With notify = "rex", every pane of the Rex session is offered, except
+    the one Neovim runs in, and the one whose program works in the
+    worktree comes first, marked as the match. The pane is captured with
+    rex capture before the confirm, which shows the last 10 lines it
+    holds. The pick is always explicit, and the confirm sends to that one
+    pane. Rex types into whatever runs there: if the agent has exited,
+    the text goes to the shell.
+
     |vim.ui.select| always asks, and cancelling sends nothing.
 
     The message carries no comment content, only where to read it: >
@@ -139,14 +178,18 @@ COMMANDS                                                      *revisa-commands*
         revisa resolve, not recado reply.
 <
     The branch is one line in the message and single-quoted for a shell,
-    with an embedded quote escaped. The send sets RECADO_ADDR=revisa in
-    the child process only, keeps the default message kind and adds
-    --meta revisa_branch=<branch>. Revisa never reads recado inbox and
+    with an embedded quote escaped. Revisa never reads recado inbox and
     never registers an agent.
 
-    Exit 0 reports "revisa: sent to <id>" and returns without polling.
-    Exit 1 reports the CLI failure from recado's stderr. Exit 2 opens the
-    picker again.
+    Through recado, the send sets RECADO_ADDR=revisa in the child process
+    only, keeps the default message kind and adds --meta
+    revisa_branch=<branch>. Exit 0 reports "revisa: sent to <id>" and
+    returns without polling. Exit 1 reports the CLI failure from recado's
+    stderr. Exit 2 opens the picker again.
+
+    Through rex, the message is typed with rex send and Return is pressed
+    with rex send-key, both into the picked block. Success reports
+    "revisa: sent to <block>" and returns; a failure reports rex's stderr.
 
 Comments also refresh on BufReadPost of real file buffers and after a successful
 add. Switching to an already loaded buffer does not refresh comments.
@@ -298,8 +341,8 @@ agent: >
 
     "none"      Do not notify agents. The default.
     "recado"    Send through recado, which must be on PATH.
-    "rex"       Accepted for a later release. Sending still reports that
-                it needs notify = "recado".
+    "rex"       Type the message into a Rex pane, which needs REX_SESSION
+                set and rex on PATH.
 <
 Any other value is an error naming these three. Without a setup call the
 setting stays "none".

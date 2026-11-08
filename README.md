@@ -112,26 +112,51 @@ revisa changes [--worktree PATH|BRANCH] [--json]
 `old -> new` after a rename. Status is `M`, `A`, `D`, `R` or `?` for an
 untracked file.
 
+## Review beside the agent
+
+When the review runs inside Rex, `:Revisa beside [WORKTREE]` opens a
+second editor next to an agent pane, working in the chosen worktree.
+Without a worktree it uses the same worktree picker as `:Revisa review`.
+It then offers the panes of the Rex session, labelled with their block
+id, label and directory; the pane whose program works in that worktree
+comes first, marked as the match. The pick is always explicit. The new
+pane runs `nvim +Revisa review <worktree>` with its working directory set
+to the worktree, so the review opens where the agent works.
+
+This needs `REX_SESSION` set and `rex` on `PATH`. Block ids are read from
+`rex block ls --json` on every call and never stored: they expire with
+the pane. `require("revisa").beside(worktree)` does the same as the
+command.
+
 ## Tell the agent that comments are waiting
 
 Agents can always pull comments with `revisa list`, so notification is
-optional. To send one through Recado, turn it on once:
+optional. Two notifiers can carry the pointer, chosen once:
 
 ```lua
 require("revisa").setup({ notify = "recado" })
+-- or
+require("revisa").setup({ notify = "rex" })
 ```
 
-`recado` must be on `PATH`, and `:Revisa send [WORKTREE]` then asks you
-which live agent to message and sends it after you confirm. Without a
-worktree it uses the changes buffer's, the diff view's, or the current
-file's. Remote agents and Codex are not offered, since they cannot
-receive these messages. The one agent working in that worktree is
+With Recado, `recado` must be on `PATH`, and `:Revisa send [WORKTREE]`
+then asks you which live agent to message and sends it after you confirm.
+Without a worktree it uses the changes buffer's, the diff view's, or the
+current file's. Remote agents and Codex are not offered, since they
+cannot receive these messages. The one agent working in that worktree is
 offered first, marked as the match; anything else, or several matches,
 leaves the choice to you.
+
+With Rex, `REX_SESSION` must be set and `rex` on `PATH`, and
+`:Revisa send [WORKTREE]` asks you which pane to type into. The pane your
+Neovim runs in is not offered. Before the confirm, the pane is captured
+with `rex capture` and its last 10 lines are shown, because `rex send`
+types into whatever runs there: if the agent has exited, the text goes to
+the shell. The pick is always explicit.
 
 The message carries no comment content, only where to read it: run
 `revisa list --branch '<branch>' --status open` and answer each comment
 with `revisa resolve`, not `recado reply`. Revisa reads no recado inbox
 and registers no agent. A successful send prints `revisa: sent to <id>`
-and returns; a failure prints recado's error; exit code `2` reopens the
-picker. The `notify` setting is `"none"` by default.
+and returns; a failure prints the notifier's error; Recado's exit code
+`2` reopens the picker. The `notify` setting is `"none"` by default.

@@ -80,12 +80,16 @@ function M.review(worktree)
     require("revisa.review").review(worktree)
 end
 
+function M.beside(worktree)
+    require("revisa.rex").beside(worktree)
+end
+
 function M.send(worktree)
-    require("revisa.send").send(worktree)
+    require("revisa.notify").send(worktree)
 end
 
 function M.setup(options)
-    require("revisa.send").setup(options or {})
+    require("revisa.notify").setup(options or {})
 end
 
 return M
