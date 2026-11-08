@@ -19,20 +19,7 @@ end
 function M.run(args)
     local command = { "rex" }
     vim.list_extend(command, args)
-    local ok, result = pcall(function()
-        return vim.system(command, { text = true }):wait()
-    end)
-    if not ok then
-        return nil, tostring(result)
-    end
-    if result.code ~= 0 then
-        local text = vim.trim(result.stderr or "")
-        if text == "" then
-            text = "rex failed (exit " .. result.code .. ")"
-        end
-        return nil, text
-    end
-    return result.stdout or ""
+    return cli.exec(command, {}, "rex")
 end
 
 -- decode runs one rex command and parses its JSON output.
@@ -41,11 +28,7 @@ local function decode(args)
     if not output then
         return nil, why
     end
-    local ok, data = pcall(vim.json.decode, output)
-    if not ok then
-        return nil, "revisa: invalid JSON from rex: " .. tostring(data)
-    end
-    return data
+    return cli.decode(output, "rex")
 end
 
 -- M.available reports whether rex can open a pane or take a message

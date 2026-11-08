@@ -27,22 +27,11 @@ end
 -- show returns the content of path at commit, read by git itself.
 local function show(worktree, commit, path)
     local command = { "git", "-C", worktree, "show", commit .. ":" .. path }
-    local ok, result = pcall(function()
-        return vim.system(command, { text = true }):wait()
-    end)
-    if not ok then
-        cli.error(tostring(result))
-        return nil
+    local output, why = cli.exec(command, {}, "git show")
+    if not output then
+        cli.error(why)
     end
-    if result.code ~= 0 then
-        local message = vim.trim(result.stderr or "")
-        if message == "" then
-            message = "git show failed (exit " .. result.code .. ")"
-        end
-        cli.error(message)
-        return nil
-    end
-    return result.stdout
+    return output
 end
 
 -- lines splits file content into the buffer lines it stands for.

@@ -59,25 +59,16 @@ end
 -- live agents on this machine are offered: remote agents, and Codex,
 -- which cannot receive these messages, are dropped.
 function M.targets(worktree)
-    local ok, result = pcall(function()
-        return vim.system({ "recado", "agents", "--json" },
-            { text = true }):wait()
-    end)
-    if not ok then
-        cli.error(tostring(result))
+    local output, why = cli.exec({ "recado", "agents", "--json" }, {},
+        "recado agents")
+    if not output then
+        cli.error(why)
         return nil
     end
-    if result.code ~= 0 then
-        local text = vim.trim(result.stderr or "")
-        if text == "" then
-            text = "recado agents failed (exit " .. result.code .. ")"
-        end
-        cli.error(text)
-        return nil
-    end
-    local decoded, data = pcall(vim.json.decode, result.stdout)
-    if not decoded or type(data) ~= "table" then
-        cli.error("revisa: invalid JSON from recado: " .. tostring(data))
+    local data, bad = cli.decode(output, "recado")
+    if type(data) ~= "table" then
+        cli.error(bad or "revisa: invalid JSON from recado: "
+            .. tostring(data))
         return nil
     end
     local targets = {}

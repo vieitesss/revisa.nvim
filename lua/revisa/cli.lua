@@ -7,6 +7,27 @@ function M.error(message)
     vim.notify(message, vim.log.levels.ERROR)
 end
 
+-- exec runs command to its end and returns its stdout, or nil and why it
+-- failed: the error starting it, its stderr, else "<what> failed (exit
+-- N)". It reports nothing itself, so each caller decides how to show it.
+function M.exec(command, options, what)
+    local ok, result = pcall(function()
+        return vim.system(command, vim.tbl_extend("force",
+            { text = true }, options)):wait()
+    end)
+    if not ok then
+        return nil, tostring(result)
+    end
+    if result.code ~= 0 then
+        local message = vim.trim(result.stderr or "")
+        if message == "" then
+            message = what .. " failed (exit " .. result.code .. ")"
+        end
+        return nil, message
+    end
+    return result.stdout or ""
+end
+
 function M.run(context, args)
     local binary = vim.fn.exepath("revisa")
     if binary == "" then
@@ -18,25 +39,22 @@ function M.run(context, args)
     end
     local command = { binary }
     vim.list_extend(command, args)
-    local ok, result = pcall(function()
-        return vim.system(command, {
-            cwd = context.cwd,
-            text = true,
-        }):wait()
-    end)
+    local output, why = M.exec(command, { cwd = context.cwd }, "revisa")
+    if not output then
+        M.error(why)
+    end
+    return output
+end
+
+-- decode parses the JSON output of from, returning the data, or nil and
+-- why it is not JSON.
+function M.decode(output, from)
+    local ok, data = pcall(vim.json.decode, output)
     if not ok then
-        M.error(tostring(result))
-        return nil
+        return nil, "revisa: invalid JSON from " .. from .. ": "
+            .. tostring(data)
     end
-    if result.code ~= 0 then
-        local message = vim.trim(result.stderr or "")
-        if message == "" then
-            message = "revisa failed (exit " .. result.code .. ")"
-        end
-        M.error(message)
-        return nil
-    end
-    return result.stdout
+    return data
 end
 
 -- json runs one CLI command in context and returns its decoded output, or
@@ -47,10 +65,9 @@ function M.json(context, args)
     if not output then
         return nil
     end
-    local ok, data = pcall(vim.json.decode, output)
-    if not ok then
-        M.error("revisa: invalid JSON from CLI: " .. tostring(data))
-        return nil
+    local data, why = M.decode(output, "CLI")
+    if why then
+        M.error(why)
     end
     return data
 end

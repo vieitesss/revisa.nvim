@@ -317,6 +317,23 @@ func TestBufferCLIReportsOneJSONError(t *testing.T) {
 		"REVISA_WORKTREE="+t.TempDir())
 }
 
+// TestBufferProcessFailuresReadTheSame pins how a failed process is
+// reported: its stderr, else "<what> failed (exit N)", for the CLI, rex
+// and recado alike.
+func TestBufferProcessFailuresReadTheSame(t *testing.T) {
+	stubs := t.TempDir()
+	for name, code := range map[string]string{
+		"revisa": "6", "rex": "4", "recado": "5",
+	} {
+		writeFile(t, stubs, name, "#!/bin/sh\nexit "+code+"\n")
+		if err := os.Chmod(filepath.Join(stubs, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	headless(t, t.TempDir(), "exec.lua", "REVISA_STUBS="+stubs,
+		"PATH="+stubs+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
 func TestBufferPlugsAndFloatKeys(t *testing.T) {
 	for _, mode := range []string{"normal", "visual"} {
 		t.Run(mode, func(t *testing.T) {
