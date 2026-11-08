@@ -213,9 +213,8 @@ function M.open(request)
         { buffer = buf, desc = "revisa: close the changes" })
 end
 
--- M.pick offers every worktree. after, when given, receives the picked
--- path instead of opening its review.
-function M.pick(after)
+-- M.pick offers every worktree and opens the review of the one picked.
+function M.pick()
     local dir = M.cliDir()
     local worktrees = cli.json({ cwd = dir }, { "worktrees", "--json" })
     if not worktrees then
@@ -230,12 +229,7 @@ function M.pick(after)
             if not index then
                 return
             end
-            local path = worktrees[index].path
-            if after then
-                after(path)
-                return
-            end
-            M.open(path)
+            M.open(worktrees[index].path)
         end)
 end
 

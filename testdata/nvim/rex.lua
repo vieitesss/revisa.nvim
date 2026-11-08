@@ -69,20 +69,6 @@ if case == "unavailable" then
     vim.cmd("Revisa send")
     H.error(messages, vim.env.REVISA_ERROR)
     H.equal(0, #offers)
-elseif case == "beside unavailable" then
-    vim.cmd("Revisa beside")
-    H.error(messages, vim.env.REVISA_ERROR)
-    H.equal(0, #offers)
-elseif case == "beside" then
-    vim.cmd("Revisa beside " .. vim.fn.fnameescape(vim.env.REVISA_WORKTREE))
-    H.equal(1, #offers)
-    assert(offers[1].prompt:find("beside", 1, true), offers[1].prompt)
-    check_panes(1, vim.env.REVISA_PANES, tonumber(vim.env.REVISA_MARKED))
-elseif case == "beside picker" then
-    vim.cmd("Revisa beside")
-    H.equal(2, #offers)
-    assert(offers[1].prompt:find("worktree", 1, true), offers[1].prompt)
-    check_panes(2, vim.env.REVISA_PANES, tonumber(vim.env.REVISA_MARKED))
 elseif case == "send" then
     H.open()
     vim.cmd("Revisa send")

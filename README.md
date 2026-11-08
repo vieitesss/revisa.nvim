@@ -118,22 +118,6 @@ revisa changes [--worktree PATH|BRANCH] [--json]
 `old -> new` after a rename. Status is `M`, `A`, `D`, `R` or `?` for an
 untracked file.
 
-## Review beside the agent
-
-When the review runs inside Rex, `:Revisa beside [WORKTREE]` opens a
-second editor next to an agent pane, working in the chosen worktree.
-Without a worktree it uses the same worktree picker as `:Revisa review`.
-It then offers the panes of the Rex session, labelled with their block
-id, label and directory; the pane whose program works in that worktree
-comes first, marked as the match. The pick is always explicit. The new
-pane runs `nvim +Revisa review <worktree>` with its working directory set
-to the worktree, so the review opens where the agent works.
-
-This needs `REX_SESSION` set and `rex` on `PATH`. Block ids are read from
-`rex block ls --json` on every call and never stored: they expire with
-the pane. `require("revisa").beside(worktree)` does the same as the
-command.
-
 ## Tell the agent that comments are waiting
 
 Agents can always pull comments with `revisa list`, so notification is

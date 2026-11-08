@@ -21,9 +21,8 @@ The plugin uses the revisa CLI. It looks for an executable named revisa on PATH,
 then for bin/revisa inside the plugin directory. If neither exists, an error
 names both locations. The CLI is the only code that reads or writes comments.
 
-The Rex features, |:Revisa-beside| and |:Revisa-send| with notify = "rex",
-need REX_SESSION set and rex on PATH. Otherwise they report that and do
-nothing.
+|:Revisa-send| with notify = "rex" needs REX_SESSION set and rex on PATH.
+Otherwise it reports that and sends nothing.
 
 The worktree picker uses |vim.ui.select|. It needs no picker plugin.
 
@@ -127,31 +126,6 @@ COMMANDS                                                      *revisa-commands*
 
     The keys are buffer-local. require("revisa").review(worktree) does the
     same as the command.
-
-:Revisa beside [WORKTREE]                                   *:Revisa-beside*
-    Open the review in a new split beside an agent pane, through Rex. It
-    needs REX_SESSION set and rex on PATH; without either, it reports
-    "revisa: rex needs REX_SESSION set and rex on PATH" and opens
-    nothing.
-
-    Without [WORKTREE], pick a worktree with |vim.ui.select|, as for
-    |:Revisa-review|. [WORKTREE] is a worktree path, and naming it skips
-    that picker.
-
-    Then every pane of the Rex session is offered with |vim.ui.select|,
-    except the one Neovim runs in. Each entry shows the block id, the pane
-    label and the directory of the pane's program. The one pane whose
-    program works in the chosen worktree is offered first, marked as the
-    match. The pick is always explicit.
-
-    The picked pane is split to the right. The new pane runs
-    "nvim +Revisa review <worktree>" with its working directory set to
-    that worktree, so the review opens where the agent works.
-
-    Block ids are read from rex block ls --json on every call and never
-    stored: they expire with the pane. No key is mapped.
-
-    require("revisa").beside(worktree) does the same as the command.
 
 :Revisa send [WORKTREE]                                         *:Revisa-send*
     Tell an agent that comments are waiting on a branch. It needs

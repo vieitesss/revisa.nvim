@@ -183,9 +183,8 @@ func TestBufferRexUnavailable(t *testing.T) {
 		session string
 		stub    bool
 	}{
-		"send without a session":   {"unavailable", "", true},
-		"send without rex":         {"unavailable", "session:one", false},
-		"beside without a session": {"beside unavailable", "", true},
+		"send without a session": {"unavailable", "", true},
+		"send without rex":       {"unavailable", "session:one", false},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -211,9 +210,9 @@ func TestBufferRexUnavailable(t *testing.T) {
 	}
 }
 
-// besidePanes is the pane list of the stub session, in the order the
+// sessionPanes is the pane list of the stub session, in the order the
 // picker offers it: the match first.
-func besidePanes(main, linked string) string {
+func sessionPanes(main, linked string) string {
 	return strings.Join([]string{
 		"block:01AGENT  llama  " + linked +
 			"  (matches this worktree)",
@@ -221,9 +220,9 @@ func besidePanes(main, linked string) string {
 	}, "\n")
 }
 
-// besideStub is the stub session every beside and send test uses: the
-// pane the plugin runs in, an agent in linked, and a shell in main.
-func besideStub(t *testing.T, main, linked string) string {
+// sessionStub is the stub session every send test uses: the pane the
+// plugin runs in, an agent in linked, and a shell in main.
+func sessionStub(t *testing.T, main, linked string) string {
 	t.Helper()
 	return rexStub(t, blocksJSON(t,
 		stubBlock{ID: "block:01ME", Label: "nvim", Cwd: main},
@@ -233,70 +232,16 @@ func besideStub(t *testing.T, main, linked string) string {
 		stubBlock{ID: "block:01OTHER", Cwd: main})
 }
 
-// wantSplit is the argv that splits beside the agent and runs the review
-// there.
-func wantSplit(worktree string) []string {
-	return []string{
-		"split", "-s", "session:one", "-b", "block:01AGENT",
-		"-c", worktree, "--", "nvim", "+Revisa review " + worktree,
-	}
-}
-
-func TestBufferRexBesideOpensTheReviewBesideThePickedPane(t *testing.T) {
-	p, _ := reviewProject(t)
-	main, linked := p.worktrees[0], p.worktrees[1]
-	stub := besideStub(t, main, linked)
-	rexCase(t, linked, stub, "session:one",
-		"REVISA_CASE=beside",
-		"REVISA_SETTING=rex",
-		"REVISA_WORKTREE="+linked,
-		"REVISA_PANES="+besidePanes(main, linked),
-		"REVISA_MARKED=1",
-		"REVISA_PICK=1")
-	equalStrings(t, "block ls argv", []string{
-		"block", "ls", "-s", "session:one", "--json",
-	}, rexArgv(t, stub, 1))
-	equalStrings(t, "process argv", []string{
-		"block", "call", "-s", "session:one",
-		"-b", "block:01AGENT", "process",
-	}, rexArgv(t, stub, 2))
-	equalStrings(t, "split argv", wantSplit(linked), rexArgv(t, stub, 4))
-	if calls := stubCalls(t, stub); calls != 4 {
-		t.Errorf("rex was called %d times, want 4", calls)
-	}
-}
-
-func TestBufferRexBesidePicksTheWorktreeFirst(t *testing.T) {
-	p, _ := reviewProject(t)
-	main, linked := p.worktrees[0], p.worktrees[1]
-	stub := besideStub(t, main, linked)
-	rexCase(t, main, stub, "session:one",
-		"REVISA_CASE=beside picker",
-		"REVISA_SETTING=rex",
-		"REVISA_WORKTREE="+main,
-		"REVISA_PANES="+besidePanes(main, linked),
-		"REVISA_MARKED=1",
-		"REVISA_PICK=2,1")
-	// The second worktree of the project is the linked one, so the pane
-	// that matches it is offered first and the split runs there. The
-	// worktree picker reads its path from git, which is already real.
-	real, err := filepath.EvalSymlinks(linked)
-	if err != nil {
-		t.Fatal(err)
-	}
-	equalStrings(t, "split argv", wantSplit(real), rexArgv(t, stub, 4))
-}
-
 func TestBufferRexInspectsThePaneBeforeSending(t *testing.T) {
 	p, _ := reviewProject(t)
 	main, linked := p.worktrees[0], p.worktrees[1]
-	stub := besideStub(t, main, linked)
+	stub := sessionStub(t, main, linked)
 	writeFile(t, stub, "capture-01AGENT.txt", "agent: working\n$ \n")
 	rexCase(t, linked, stub, "session:one",
 		"REVISA_CASE=send",
 		"REVISA_SETTING=rex",
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
-		"REVISA_PANES="+besidePanes(main, linked),
+		"REVISA_PANES="+sessionPanes(main, linked),
 		"REVISA_MARKED=1",
 		"REVISA_PREVIEW=agent: working\n$ ",
 		"REVISA_PICK=1,1")
@@ -317,13 +262,13 @@ func TestBufferRexInspectsThePaneBeforeSending(t *testing.T) {
 func TestBufferRexCancelTypesNothing(t *testing.T) {
 	p, _ := reviewProject(t)
 	main, linked := p.worktrees[0], p.worktrees[1]
-	stub := besideStub(t, main, linked)
+	stub := sessionStub(t, main, linked)
 	writeFile(t, stub, "capture-01AGENT.txt", "agent: working\n")
 	rexCase(t, linked, stub, "session:one",
 		"REVISA_CASE=cancel",
 		"REVISA_SETTING=rex",
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
-		"REVISA_PANES="+besidePanes(main, linked),
+		"REVISA_PANES="+sessionPanes(main, linked),
 		"REVISA_MARKED=1",
 		"REVISA_PREVIEW=agent: working",
 		"REVISA_PICK=1,cancel")
@@ -337,13 +282,13 @@ func TestBufferRexStoresNoBlockIDs(t *testing.T) {
 	main, linked := p.worktrees[0], p.worktrees[1]
 	id := addOK(t, linked, "--path", "src/a.lua", "--lines", "2",
 		"--body", "Keep the context")
-	stub := besideStub(t, main, linked)
+	stub := sessionStub(t, main, linked)
 	writeFile(t, stub, "capture-01AGENT.txt", "agent: working\n")
 	rexCase(t, linked, stub, "session:one",
 		"REVISA_CASE=send",
 		"REVISA_SETTING=rex",
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
-		"REVISA_PANES="+besidePanes(main, linked),
+		"REVISA_PANES="+sessionPanes(main, linked),
 		"REVISA_MARKED=1",
 		"REVISA_PREVIEW=agent: working",
 		"REVISA_PICK=1,1")
