@@ -1,6 +1,7 @@
 local M = {}
 local api = vim.api
 local cli = require("revisa.cli")
+local review = require("revisa.review")
 local target = require("revisa.target")
 
 local settings = { notify = "none" }
@@ -25,20 +26,6 @@ function M.setup(options)
         return
     end
     settings.notify = notify
-end
-
--- decode runs one CLI command in dir and parses its JSON output.
-local function decode(dir, args)
-    local output = cli.run({ cwd = dir }, args)
-    if not output then
-        return nil
-    end
-    local ok, data = pcall(vim.json.decode, output)
-    if not ok then
-        cli.error("revisa: invalid JSON from CLI: " .. tostring(data))
-        return nil
-    end
-    return data
 end
 
 -- quote wraps a branch name in single quotes for a shell.
@@ -177,7 +164,7 @@ function M.send(request)
         return
     end
     local found = target.of(api.nvim_get_current_buf())
-    local dir, named = require("revisa.review").cliDir(request)
+    local dir, named = review.cliDir(request)
     local worktreePath = named
     if worktreePath == nil or worktreePath == "" then
         worktreePath = found and found.worktree
@@ -187,7 +174,7 @@ function M.send(request)
         return
     end
     local args = { "changes", "--json", "--worktree", worktreePath }
-    local data = decode(dir, args)
+    local data = cli.json({ cwd = dir }, args)
     if not data then
         return
     end

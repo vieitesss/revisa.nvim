@@ -39,4 +39,20 @@ function M.run(context, args)
     return result.stdout
 end
 
+-- json runs one CLI command in context and returns its decoded output, or
+-- nil. A bad payload is reported here, so every caller reports it once
+-- and the same way.
+function M.json(context, args)
+    local output = M.run(context, args)
+    if not output then
+        return nil
+    end
+    local ok, data = pcall(vim.json.decode, output)
+    if not ok then
+        M.error("revisa: invalid JSON from CLI: " .. tostring(data))
+        return nil
+    end
+    return data
+end
+
 return M

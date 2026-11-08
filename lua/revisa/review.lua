@@ -5,19 +5,6 @@ local cli = require("revisa.cli")
 local diff = require("revisa.diff")
 local target = require("revisa.target")
 
-local function decode(context, args)
-    local output = cli.run(context, args)
-    if not output then
-        return nil
-    end
-    local ok, data = pcall(vim.json.decode, output)
-    if not ok then
-        cli.error("revisa: invalid JSON from CLI: " .. tostring(data))
-        return nil
-    end
-    return data
-end
-
 local function label(branch)
     if branch == nil or branch == "" then
         return "(detached)"
@@ -64,7 +51,7 @@ local function fetchChanges(request)
     if named and named ~= "" then
         vim.list_extend(args, { "--worktree", named })
     end
-    return decode({ cwd = dir }, args)
+    return cli.json({ cwd = dir }, args)
 end
 
 -- name is the buffer name of one changes list. A detached worktree has
@@ -120,8 +107,8 @@ local function draw(buf, data)
     api.nvim_win_set_cursor(0, { math.min(cursor, #lines), 0 })
 end
 
--- entry returns the change on line of buf, or nil on a header line.
--- The diff view reads the entry under the cursor through this.
+-- entry returns the change on line of buf, or nil on a header line. A
+-- caller with no line reads the change under the cursor.
 function M.entry(buf, line)
     local session = vim.b[buf].revisa_session
     if type(session) ~= "table" then
@@ -230,7 +217,7 @@ end
 -- path instead of opening its review.
 function M.pick(after)
     local dir = M.cliDir()
-    local worktrees = decode({ cwd = dir }, { "worktrees", "--json" })
+    local worktrees = cli.json({ cwd = dir }, { "worktrees", "--json" })
     if not worktrees then
         return
     end

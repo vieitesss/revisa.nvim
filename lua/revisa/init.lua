@@ -27,13 +27,8 @@ function M.refresh(buf)
         cli.error(err)
         return
     end
-    local output = cli.run({ cwd = found.cwd }, { "list", "--json" })
-    if not output then
-        return
-    end
-    local ok, comments = pcall(vim.json.decode, output)
-    if not ok then
-        cli.error("revisa: invalid JSON from CLI: " .. tostring(comments))
+    local comments = cli.json({ cwd = found.cwd }, { "list", "--json" })
+    if not comments then
         return
     end
     display.draw(buf, found, comments, show_resolved)

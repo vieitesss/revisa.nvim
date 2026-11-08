@@ -310,6 +310,13 @@ func TestBufferExplicitRefreshAndNoBufEnterRefresh(t *testing.T) {
 		"REVISA_WORKTREE="+linked)
 }
 
+// TestBufferCLIReportsOneJSONError pins the shared CLI JSON helper: every
+// caller that decodes CLI output reports a bad payload the same way.
+func TestBufferCLIReportsOneJSONError(t *testing.T) {
+	headless(t, t.TempDir(), "json.lua",
+		"REVISA_WORKTREE="+t.TempDir())
+}
+
 func TestBufferPlugsAndFloatKeys(t *testing.T) {
 	for _, mode := range []string{"normal", "visual"} {
 		t.Run(mode, func(t *testing.T) {
