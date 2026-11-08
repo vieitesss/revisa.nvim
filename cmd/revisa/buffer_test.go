@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -245,17 +246,31 @@ func TestBufferFloatSpaceInScrolledAndDiffWindows(t *testing.T) {
 	}
 }
 
+// TestBufferRefusesNonFilesAndModifiedBuffers covers #9 for another
+// tool's old-side buffer: it names the scheme in a clear error and
+// stores nothing.
 func TestBufferRefusesNonFilesAndModifiedBuffers(t *testing.T) {
-	for _, kind := range []string{
-		"virtual", "patch", "scheme", "missing", "unnamed",
-		"directory", "modified",
-	} {
+	cannot := "revisa: cannot comment in a %s:// buffer; " +
+		"open the file or use :Revisa review"
+	cases := map[string]string{
+		"virtual":   "revisa: comments require a real file buffer",
+		"patch":     "revisa: comments require a real file buffer",
+		"scheme":    fmt.Sprintf(cannot, "tool"),
+		"fugitive":  fmt.Sprintf(cannot, "fugitive"),
+		"diffview":  fmt.Sprintf(cannot, "diffview"),
+		"missing":   "revisa: comments require a file on disk",
+		"unnamed":   "revisa: comments require a file on disk",
+		"directory": "revisa: comments require a file on disk",
+		"modified":  "save the buffer before commenting",
+	}
+	for kind, message := range cases {
 		t.Run(kind, func(t *testing.T) {
 			p, _ := reviewProject(t)
 			linked := p.worktrees[1]
 			headless(t, linked, "refuse.lua",
 				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
-				"REVISA_CASE="+kind)
+				"REVISA_CASE="+kind,
+				"REVISA_ERROR="+message)
 			if got := listJSON(t, linked); len(got) != 0 {
 				t.Errorf("refused buffer stored comments: %v", got)
 			}

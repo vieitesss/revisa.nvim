@@ -105,6 +105,40 @@ local function check_diff()
     return old, new
 end
 
+-- check_old_comment asserts one old-side comment is drawn on line of
+-- the old side, with body below it on screen, and never on the new side.
+local function check_old_comment(old, new, line, body)
+    local oldbuf = api.nvim_win_get_buf(old)
+    local newbuf = api.nvim_win_get_buf(new)
+    H.equal({ { line = line, text = ">", group = "RevisaSign" } },
+        H.signs(oldbuf))
+    H.equal({}, H.signs(newbuf))
+    H.equal({
+        {
+            row = line,
+            above = true,
+            lines = { { { body, "RevisaComment" } } },
+        },
+    }, H.virtual(oldbuf))
+    H.equal({}, H.virtual(newbuf))
+    vim.o.lines = 20
+    vim.o.columns = 100
+    local rows = H.screen()
+    local drawn = H.row(rows, body)
+    assert(drawn, "old comment not rendered: " .. vim.inspect(rows))
+    local position = vim.fn.screenpos(old, line, 1)
+    assert(position.row > 0, "old line is not on screen")
+    H.equal(position.row + 1, drawn)
+end
+
+-- comment writes body in the comment float of the current line.
+local function comment(body)
+    vim.cmd("Revisa comment")
+    local editor = H.float()
+    api.nvim_buf_set_lines(editor, 0, -1, false, { body })
+    vim.cmd("write")
+end
+
 if case == "deleted" then
     review()
     return function()
@@ -184,6 +218,45 @@ elseif case == "close" then
                 H.equal(list, api.nvim_get_current_buf())
                 H.equal(2, #api.nvim_list_wins())
             end
+        end
+    end
+elseif case == "old-comment" then
+    review()
+    return function()
+        H.keys("<CR>")
+        return function()
+            local old, new = check_diff()
+            check_old_comment(old, new, 2, "Old side body")
+        end
+    end
+elseif case == "old-line" or case == "old-renamed" then
+    local line = case == "old-line" and 2 or 3
+    local body = case == "old-line" and "Old side body" or "Moved line"
+    review()
+    return function()
+        H.keys("<CR>")
+        return function()
+            local old, new = check_diff()
+            api.nvim_set_current_win(old)
+            api.nvim_win_set_cursor(old, { line, 0 })
+            comment(body)
+            return function()
+                check_old_comment(old, new, line, body)
+            end
+        end
+    end
+elseif case == "old-moved" then
+    review()
+    return function()
+        H.keys("<CR>")
+        return function()
+            local old, new = check_diff()
+            local oldbuf = api.nvim_win_get_buf(old)
+            H.equal({}, H.signs(oldbuf))
+            H.equal({}, H.virtual(oldbuf))
+            H.equal(nil, H.text(oldbuf))
+            H.equal({}, H.signs(api.nvim_win_get_buf(new)))
+            H.equal(nil, H.row(H.screen(), "Old side body"))
         end
     end
 elseif case == "binary" then

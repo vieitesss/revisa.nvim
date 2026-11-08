@@ -143,6 +143,9 @@ function M.open(change)
     local buf = scratch(name(change.commit, oldPath), old, oldPath)
     api.nvim_win_set_buf(oldWin, buf)
     pin(buf, change.worktree, change.branch, oldPath, "old", change.commit)
+    -- The old side is never read from disk, so no BufReadPost fires and
+    -- its comments are drawn here instead.
+    require("revisa").refresh(buf)
     vim.keymap.set("n", "q", M.close,
         { buffer = buf, desc = "revisa: close the diff" })
     vim.cmd.diffthis()

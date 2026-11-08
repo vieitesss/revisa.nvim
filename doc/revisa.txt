@@ -43,12 +43,17 @@ COMMANDS                                                      *revisa-commands*
     Modified buffers are refused with "save the buffer before commenting".
     Virtual buffers, patch buffers with a nonempty 'buftype', scheme:// names,
     and buffers without a real file on disk are refused without storing a
-    comment. Another diff tool's real file buffer works without an adapter.
+    comment. Another diff tool's real file buffer works without an adapter,
+    but its old-side buffer does not: commenting there is refused with
+    "revisa: cannot comment in a fugitive:// buffer; open the file or use
+    :Revisa review", naming that tool's scheme.
 
     In the diff view of |:Revisa-review|, the left side comments on the old
     side: the comment belongs to the branch under review and is read at the
-    base commit. The right side of a deleted file stores nothing and reports
-    that the path is not found in the worktree.
+    base commit. A line only the base has, such as one the change deleted,
+    takes a comment there. A renamed entry reads its old path, so comment on
+    that path stores the old path. The right side of a deleted file stores
+    nothing and reports that the path is not found in the worktree.
 
 :Revisa refresh                                               *:Revisa-refresh*
     Reload comments for the current file.
@@ -96,9 +101,10 @@ COMMANDS                                                      *revisa-commands*
     The diff view puts the base content on the left and the worktree file
     on the right, with 'diff' set in both windows. The left side is a
     read-only scratch buffer named revisa://<base sha7>/<path>, filled by
-    git show of the base commit and given the filetype of the path. A
-    renamed entry reads its old path there; an added or untracked entry
-    has an empty left side.
+    git show of the base commit and given the filetype of the path, and
+    its old-side comments are drawn as it opens. A renamed entry reads
+    its old path there; an added or untracked entry has an empty left
+    side.
 
     The right side is the real file, so it stays editable and comments
     work there as on any other real file buffer. A deleted entry has an
@@ -269,7 +275,12 @@ and is not written by :write. |:Revisa-refresh| redraws it, and when the
 anchor text comes back the comment returns to its line with no marker. The
 empty new side of a deleted file in the diff view shows the same block.
 
-Old-side comments are not drawn in a new-side buffer.
+Old-side comments are drawn on the old side of the diff view, when the diff
+opens and again after a comment is added there. A new-side buffer never
+shows them. The base commit pins them: when the base has moved, as after a
+rebase, the diff's old side is another commit and none of them are drawn.
+`revisa list` still prints such a comment, with its side and short
+commit, and it is never reported as outdated.
 
 Highlight groups use default links, which users can override:
 

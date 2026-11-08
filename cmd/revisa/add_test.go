@@ -255,3 +255,48 @@ func TestReposWhosePathsDifferByTrailingSpaceKeepSeparateStores(
 		t.Errorf("want 1 comment, got %d", len(got))
 	}
 }
+
+// TestAddOldSideOnDeletedLine covers #9 at the CLI seam: a line only the
+// base has stores the old side, the path and that commit.
+func TestAddOldSideOnDeletedLine(t *testing.T) {
+	_, linked := changesProject(t)
+	base := git(t, linked, "merge-base", "main", "HEAD")
+	addOK(t, linked, "--side", "old", "--commit", base,
+		"--path", "src/gone.go", "--lines", "1", "--body", "Why gone?")
+	got := listJSON(t, linked)
+	if len(got) != 1 {
+		t.Fatalf("want 1 comment, got %v", got)
+	}
+	for field, value := range map[string]any{
+		"path": "src/gone.go", "side": "old", "branch": "feat/x",
+		"commit": base, "anchor_text": "package gone",
+		"body": "Why gone?",
+	} {
+		if got[0][field] != value {
+			t.Errorf("%s: got %#v, want %#v",
+				field, got[0][field], value)
+		}
+	}
+}
+
+// TestAddOldSideOnRenamedFileStoresOldPath covers #9: after a rename the
+// base has only the old path, so that is the path the comment stores.
+func TestAddOldSideOnRenamedFileStoresOldPath(t *testing.T) {
+	_, linked := changesProject(t)
+	base := git(t, linked, "merge-base", "main", "HEAD")
+	addOK(t, linked, "--side", "old", "--commit", base,
+		"--path", "src/moved.go", "--lines", "3", "--body", "Moved why?")
+	got := listJSON(t, linked)
+	if len(got) != 1 {
+		t.Fatalf("want 1 comment, got %v", got)
+	}
+	for field, value := range map[string]any{
+		"path": "src/moved.go", "side": "old", "commit": base,
+		"anchor_text": "line",
+	} {
+		if got[0][field] != value {
+			t.Errorf("%s: got %#v, want %#v",
+				field, got[0][field], value)
+		}
+	}
+}

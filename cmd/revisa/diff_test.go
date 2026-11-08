@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -160,6 +161,151 @@ func TestBufferDiffRenamedFileShowsOldPath(t *testing.T) {
 			"line",
 		},
 		fileType: "go",
+	})
+}
+
+// TestBufferDiffOldSideCommentDrawsOnOpen covers #9 at the headless
+// seam: an old-side comment stored before the diff opens is drawn on its
+// line of the old side, and not on the same line of the new side.
+func TestBufferDiffOldSideCommentDrawsOnOpen(t *testing.T) {
+	p, linked := changesProject(t)
+	base := git(t, linked, "merge-base", "main", "HEAD")
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "2",
+		"--side", "old", "--commit", base, "--body", "Old side body")
+	runDiff(t, p, linked, diffCase{
+		name: "old-comment", entry: "M src/a.lua",
+		path: "src/a.lua", oldPath: "src/a.lua",
+		old:      committedLines,
+		new:      editedLines,
+		fileType: "lua",
+	})
+}
+
+// TestBufferDiffOldSideCommentOnDeletedLine covers #9: a comment on a
+// line only the old side has stores the old side, the old path and the
+// base commit, and is drawn there.
+func TestBufferDiffOldSideCommentOnDeletedLine(t *testing.T) {
+	p, linked := changesProject(t)
+	base := git(t, linked, "merge-base", "main", "HEAD")
+	runDiff(t, p, linked, diffCase{
+		name: "old-line", entry: "M src/a.lua",
+		path: "src/a.lua", oldPath: "src/a.lua",
+		old:      committedLines,
+		new:      editedLines,
+		fileType: "lua",
+	})
+	got := listJSON(t, linked)
+	if len(got) != 1 {
+		t.Fatalf("want 1 comment, got %v", got)
+	}
+	for field, value := range map[string]any{
+		"path": "src/a.lua", "side": "old", "branch": "feat/x",
+		"commit": base, "line_start": 2.0, "line_end": 2.0,
+		"anchor_text": "local b = 2", "body": "Old side body",
+		"status": "open",
+	} {
+		if got[0][field] != value {
+			t.Errorf("%s: got %#v, want %#v",
+				field, got[0][field], value)
+		}
+	}
+}
+
+// TestBufferDiffRenamedFileOldSideCommentStoresOldPath covers #9 for a
+// renamed file: the old side reads the old path, so a comment there
+// stores it.
+func TestBufferDiffRenamedFileOldSideCommentStoresOldPath(t *testing.T) {
+	p, linked := changesProject(t)
+	base := git(t, linked, "merge-base", "main", "HEAD")
+	runDiff(t, p, linked, diffCase{
+		name: "old-renamed", entry: "R src/moved.go -> src/renamed.go",
+		path: "src/renamed.go", oldPath: "src/moved.go",
+		old:      repeatLines("line", 20),
+		new:      repeatLines("line", 21),
+		fileType: "go",
+	})
+	got := listJSON(t, linked)
+	if len(got) != 1 {
+		t.Fatalf("want 1 comment, got %v", got)
+	}
+	for field, value := range map[string]any{
+		"path": "src/moved.go", "side": "old", "commit": base,
+		"line_start": 3.0, "anchor_text": "line",
+		"body": "Moved line",
+	} {
+		if got[0][field] != value {
+			t.Errorf("%s: got %#v, want %#v",
+				field, got[0][field], value)
+		}
+	}
+}
+
+// repeatLines returns n buffer lines of the same text.
+func repeatLines(text string, n int) []string {
+	lines := make([]string, n)
+	for i := range lines {
+		lines[i] = text
+	}
+	return lines
+}
+
+// movedBaseProject is a project whose feat/x worktree was rebased onto a
+// moved main, so its base is newer than the commit a comment may pin.
+func movedBaseProject(t *testing.T) (
+	p project, linked, commentCommit string,
+) {
+	t.Helper()
+	root := t.TempDir()
+	main := filepath.Join(root, "main")
+	git(t, root, "init", "-q", "-b", "main", main)
+	writeFile(t, main, "src/a.lua", "local a = 1\nlocal b = 2\n")
+	git(t, main, "add", ".")
+	git(t, main, "commit", "-q", "-m", "init")
+	commentCommit = git(t, main, "rev-parse", "HEAD")
+	linked = filepath.Join(root, "linked")
+	git(t, main, "worktree", "add", "-q", "-b", "feat/x", linked)
+	writeFile(t, main, "src/a.lua", "local a = 9\nlocal b = 2\n")
+	git(t, main, "commit", "-q", "-am", "move")
+	git(t, linked, "rebase", "-q", "main")
+	writeFile(t, linked, "src/a.lua", "local a = 9\nlocal x = y\n")
+	return project{worktrees: []string{main, linked}}, linked, commentCommit
+}
+
+// TestBufferDiffOldSideCommentWithMovedBaseIsNotDrawn covers #9: after a
+// rebase moves the base, the comment stays listed with its commit and is
+// not drawn inline, because the diff's old side is another commit.
+func TestBufferDiffOldSideCommentWithMovedBaseIsNotDrawn(t *testing.T) {
+	p, linked, commit := movedBaseProject(t)
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "2",
+		"--side", "old", "--commit", commit, "--body", "Old side body")
+	got := listJSON(t, linked)
+	if len(got) != 1 {
+		t.Fatalf("want 1 comment, got %v", got)
+	}
+	for field, value := range map[string]any{
+		"side": "old", "commit": commit, "line_start": 2.0,
+	} {
+		if got[0][field] != value {
+			t.Errorf("%s: got %#v, want %#v",
+				field, got[0][field], value)
+		}
+	}
+	if condition, flagged := got[0]["condition"]; flagged {
+		t.Errorf("old-side comment has a condition: %v", condition)
+	}
+	out, stderr, code := run(t, linked, "list")
+	if code != 0 {
+		t.Fatalf("list exit %d: %s", code, stderr)
+	}
+	if !strings.Contains(out, "old "+commit[:12]) {
+		t.Errorf("list does not label side and commit:\n%s", out)
+	}
+	runDiff(t, p, linked, diffCase{
+		name: "old-moved", entry: "M src/a.lua",
+		path: "src/a.lua", oldPath: "src/a.lua",
+		old:      []string{"local a = 9", "local b = 2"},
+		new:      []string{"local a = 9", "local x = y"},
+		fileType: "lua",
 	})
 }
 

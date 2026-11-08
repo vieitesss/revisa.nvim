@@ -53,8 +53,9 @@ authority for its commands: `revisa --help` lists them.
 2. **Read the code.**
    - `new` side: inspect the file in your worktree. A comment with no
      condition is on its printed lines.
-   - `old` side (git only): read the commented version with
-     `git show <commit>:<path>`.
+   - `old` side (git only): the printed lines are lines of the commit in
+     the header, which pins the comment: it never moves and is never
+     outdated. Read the commented version with `git show <commit>:<path>`.
    - `outdated`: the anchor text is not in the file any more. The `was:`
      lines are the code the reviewer commented on: work out whether your
      change moved it, reworded it or removed it, and ask the user when you

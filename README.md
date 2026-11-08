@@ -85,9 +85,14 @@ Comments on the opened file appear as usual.
 The diff view opens in a new tab, with the content at the base on the
 left and the real file on the right, both in Neovim's diff mode. The
 right side stays editable, so comments work there like on any file, and
-the left side comments on the old side at the base commit. A renamed
-entry reads its old path on the left, an added or untracked one has an
-empty left side, and a deleted one has an empty right side. Revisa
+the left side comments on the old side at the base commit, where its
+stored comments are drawn as it opens. A line only the base has, such as
+a deleted one, takes a comment there. A renamed entry reads its old path
+on the left, so the comment stores that path; an added or untracked one
+has an empty left side, and a deleted one has an empty right side. A
+comment pinned to an older base, as after a rebase, is not drawn inline
+but still listed. Commenting in another tool's `scheme://` buffer is
+refused with a message naming the scheme. Revisa
 computes no diff: git provides the base content and Neovim renders the
 comparison. `q` on the left side closes the tab. A file with a NUL byte
 in its first 8000 bytes is reported as binary instead of opened.

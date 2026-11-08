@@ -3,7 +3,12 @@ local uv = vim.uv
 
 function M.file(buf)
     local name = vim.api.nvim_buf_get_name(buf)
-    if vim.bo[buf].buftype ~= "" or name:match("^%w[%w+.-]*://") then
+    local scheme = name:match("^(%w[%w+.-]*)://")
+    if scheme then
+        return nil, "revisa: cannot comment in a " .. scheme .. ":// " ..
+            "buffer; open the file or use :Revisa review"
+    end
+    if vim.bo[buf].buftype ~= "" then
         return nil, "revisa: comments require a real file buffer"
     end
     local info = uv.fs_stat(name)

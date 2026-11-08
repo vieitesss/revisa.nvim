@@ -78,9 +78,13 @@ function M.of(buf)
 end
 
 -- M.file returns a target that names one file version, which commenting
--- and drawing comments need, or nil and the reason.
-function M.file(target)
-    if not target or target.kind ~= "file" then
+-- and drawing comments need, or nil and the reason. The reason target.of
+-- gave wins, so a buffer of another tool hears which buffer it is.
+function M.file(target, why)
+    if not target then
+        return nil, why or require_file
+    end
+    if target.kind ~= "file" then
         return nil, require_file
     end
     return target

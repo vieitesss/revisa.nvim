@@ -153,4 +153,5 @@ require("revisa.diff").close()
 check_scratch(vim.env.REVISA_FILE .. ".missing",
     "revisa: comments require a file on disk")
 check_scratch("tool://old-side/src/a.lua",
-    "revisa: comments require a real file buffer")
+    "revisa: cannot comment in a tool:// buffer; open the file or use " ..
+    ":Revisa review")
