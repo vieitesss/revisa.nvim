@@ -22,6 +22,9 @@ api.nvim_set_hl(0, "RevisaWas", { link = "Comment", default = true })
 
 api.nvim_create_user_command("Revisa", function(command)
     local name, rest = command.args:match("^(%S+)%s*(.*)$")
+    if not name then
+        name, rest = "", ""
+    end
     if name ~= "review" and name ~= "send" and name ~= "beside"
         and rest ~= "" then
         require("revisa.cli").error(
