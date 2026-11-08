@@ -328,6 +328,9 @@ working directory: >
     revisa review ../linked
 <
 REVISA_NVIM chooses the editor executable instead of nvim.
+The worktree reaches Neovim in REVISA_REVIEW_WORKTREE, which keeps a
+path with spaces or bars whole. The first :Revisa review reads it and
+clears it, so a later :Revisa review opens the picker.
 
 The CLI prints the same data for scripts and agents: >
 
