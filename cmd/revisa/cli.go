@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vieitesss/revisa.nvim/internal/anchor"
 	"github.com/vieitesss/revisa.nvim/internal/git"
 	"github.com/vieitesss/revisa.nvim/internal/project"
 	"github.com/vieitesss/revisa.nvim/internal/store"
@@ -167,14 +168,20 @@ func list(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	matched := []store.Comment{}
+	matched := []listed{}
+	source := anchorSource(p)
 	for _, c := range all {
 		if p.Git && c.Branch != *branch {
 			continue
 		}
-		if *status == "" || c.Status == *status {
-			matched = append(matched, c)
+		if *status != "" && c.Status != *status {
+			continue
 		}
+		located, err := anchor.Locate(c, source)
+		if err != nil {
+			return err
+		}
+		matched = append(matched, newListed(c, located))
 	}
 
 	if *asJSON {
@@ -182,22 +189,47 @@ func list(args []string, stdout, stderr io.Writer) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(matched)
 	}
-	for i, c := range matched {
+	for i, l := range matched {
 		if i > 0 {
 			fmt.Fprintln(stdout)
 		}
-		writePlain(stdout, c)
+		writePlain(stdout, l)
 	}
 	return nil
 }
 
-func writePlain(w io.Writer, c store.Comment) {
-	lines := fmt.Sprintf("%d", c.LineStart)
-	if c.LineEnd != c.LineStart {
-		lines = fmt.Sprintf("%d-%d", c.LineStart, c.LineEnd)
+// listed is a comment as `list` prints it: its stored fields, where its
+// anchor text is now, and why its lines are unknown.
+type listed struct {
+	store.Comment
+	LineStart *int   `json:"line_start"`
+	LineEnd   *int   `json:"line_end"`
+	Condition string `json:"condition,omitempty"`
+}
+
+func newListed(c store.Comment, where anchor.Result) listed {
+	l := listed{Comment: c, Condition: where.Condition}
+	if where.Condition == "" {
+		l.LineStart = &where.LineStart
+		l.LineEnd = &where.LineEnd
 	}
-	header := fmt.Sprintf("%s %s:%s %s %s",
-		c.ID, c.Path, lines, c.Side, c.Commit[:min(12, len(c.Commit))])
+	return l
+}
+
+func writePlain(w io.Writer, l listed) {
+	c := l.Comment
+	header := c.ID + " " + c.Path
+	if l.LineStart != nil {
+		lines := fmt.Sprintf(":%d", *l.LineStart)
+		if *l.LineEnd != *l.LineStart {
+			lines = fmt.Sprintf(":%d-%d", *l.LineStart, *l.LineEnd)
+		}
+		header += lines
+	}
+	header += fmt.Sprintf(" %s %s", c.Side, c.Commit[:min(12, len(c.Commit))])
+	if l.Condition != "" {
+		header += " " + l.Condition
+	}
 	if c.Status == "resolved" {
 		header += " resolved"
 	}
@@ -205,6 +237,64 @@ func writePlain(w io.Writer, c store.Comment) {
 	if c.Reply != nil {
 		fmt.Fprintf(w, "reply: %s\n", *c.Reply)
 	}
+	if l.Condition != "" {
+		for _, line := range strings.Split(c.AnchorText, "\n") {
+			fmt.Fprintf(w, "was: %s\n", line)
+		}
+	}
+}
+
+// anchorSource returns the reader of the branch's current files.
+func anchorSource(p project.Project) anchor.Source {
+	if !p.Git {
+		return dirSource(p.Root)
+	}
+	dir := p.Root
+	if dir == "" {
+		dir = filepath.Dir(p.Store)
+	}
+	return gitSource(dir)
+}
+
+// gitSource reads a branch's files from a worktree that has it checked
+// out, or from the branch's tip when no worktree does.
+type gitSource string
+
+func (g gitSource) Read(branch, path string) (string, error) {
+	worktree, err := git.WorktreeOf(string(g), branch)
+	if err != nil {
+		return "", err
+	}
+	if worktree != "" {
+		return readCurrent(worktree, path)
+	}
+	if _, err := git.ResolveCommit(string(g),
+		"refs/heads/"+branch); err != nil {
+		return "", anchor.ErrNoBranch
+	}
+	content, err := git.Show(string(g), branch, path)
+	if err != nil {
+		return "", anchor.ErrNoFile
+	}
+	return content, nil
+}
+
+// dirSource reads the files under a project root outside git.
+type dirSource string
+
+func (d dirSource) Read(_, path string) (string, error) {
+	return readCurrent(string(d), path)
+}
+
+func readCurrent(dir, path string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(dir, path))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", anchor.ErrNoFile
+	}
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func add(args []string, stdout, stderr io.Writer) error {

@@ -28,18 +28,39 @@ authority for its commands: `revisa --help` lists them.
    Handle nil here
    ```
 
-   The header holds the id, the path from the repo root, the original
+   The header holds the id, the path from the repo root, the current
    line range, the side and the commit the comment was made on. Copy the
    whole id from this output. Never shorten or guess one.
 
+   On a `new` side comment the lines are where the anchor text is now:
+   `list` works them out on every run, so edits that move the lines are
+   followed.
+
+   A comment whose anchor text is gone prints no line numbers, ends its
+   header with `outdated`, and adds the anchor text after its body:
+
+   ```text
+   01JC8Z7K3M9QX2V5T1R4N6P8WY src/a.lua new 3f9c2e1 outdated
+   Handle nil here
+   was: local x = y
+   was: if x then
+   ```
+
+   There is one `was:` line per commented line, in order. When the branch
+   is gone too, the header ends with `unknown` instead and revisa cannot
+   tell whether the code is still there.
+
 2. **Read the code.**
-   - `new` side: inspect the file in your worktree. The original lines may
-     have moved or changed since the comment was made.
+   - `new` side: inspect the file in your worktree. A comment with no
+     condition is on its printed lines.
    - `old` side (git only): read the commented version with
      `git show <commit>:<path>`.
-   - Revisa does not yet detect outdated comments. If you cannot find the
-     commented code, run `revisa list --status open --json` and use the
-     comment's `anchor_text` to locate it.
+   - `outdated`: the anchor text is not in the file any more. The `was:`
+     lines are the code the reviewer commented on: work out whether your
+     change moved it, reworded it or removed it, and ask the user when you
+     cannot tell.
+   - `unknown`: the branch no longer exists, so revisa cannot check the
+     code. Treat the `was:` lines as the version commented on.
 
 3. **Fix.** Make the change the comment asks for, and check it the way you
    check any change in this repo (tests, lint).
@@ -55,8 +76,10 @@ authority for its commands: `revisa --help` lists them.
 4. **Resolve.** Run `revisa resolve <id> --reply "<what you changed>"`.
    The reply is the one answer the reviewer reads: say what changed and
    where, in a sentence or two. Resolve each comment once, after its fix
-   is done. If `resolve` reports the comment is already resolved, it is
-   done: do not retry, and there is no way to change the reply. Never run
+   is done. An outdated or unknown comment resolves like any other: the
+   fix can be a change elsewhere, or a reply saying the code is gone. If
+   `resolve` reports the comment is already resolved, it is done: do not
+   retry, and there is no way to change the reply. Never run
    `revisa prune`: it deletes the reviewer's resolved comments.
 
 Done when `revisa list --status open` prints only the comments you

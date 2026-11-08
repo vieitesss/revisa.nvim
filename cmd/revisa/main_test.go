@@ -26,8 +26,11 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-const openOnFeatX = `01JC8Z7K3M9QX2V5T1R4N6P8WY src/a.lua:12-14 new abc123
+const openOnFeatX = `01JC8Z7K3M9QX2V5T1R4N6P8WY src/a.lua new abc123 outdated
 Handle nil here
+was: local x = y
+was: if x then
+was:   run(x)
 
 01JC8Z9A0B1C2D3E4F5G6H7J8K src/b.lua:3 old def456
 Why was the cache removed?
@@ -114,6 +117,9 @@ func TestListOnDetachedHeadNeedsBranch(t *testing.T) {
 func TestListJSONPrintsEverySchemaField(t *testing.T) {
 	p := normalClone(t)
 	addMocks(t, p.worktrees[0])
+	// The mocked comment is still anchored on its stored lines.
+	lines := strings.Repeat("\n", 11) + "local x = y\nif x then\n  run(x)\n"
+	writeFile(t, p.worktrees[1], "src/a.lua", lines)
 	out, stderr, code := run(t, p.worktrees[0],
 		"list", "--branch", "feat/x", "--json")
 	if code != 0 {

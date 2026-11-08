@@ -17,7 +17,10 @@ function M.buffers()
 end
 
 local function shown(comment, count, show_resolved)
-    if comment.side ~= "new" or comment.line_end > count then
+    -- Outdated and unknown comments have no current lines to draw on.
+    if comment.side ~= "new" or type(comment.line_end) ~= "number"
+        or comment.line_end > count
+    then
         return false
     end
     if comment.status == "resolved" then

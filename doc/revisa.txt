@@ -187,6 +187,9 @@ appear inline too:
     - The full body, then the reply, as virtual lines below the last line.
       The first reply line starts with "reply: ".
 
+A comment the CLI reports as outdated or unknown has no current lines, so it
+is not drawn.
+
 Old-side comments are not displayed by this feature.
 
 Highlight groups use default links, which users can override:
