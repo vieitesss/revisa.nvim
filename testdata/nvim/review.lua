@@ -75,6 +75,31 @@ elseif case == "open" then
             H.display(api.nvim_get_current_buf(), 2, 2, { "Handle nil" })
         end
     end
+elseif case == "outside" then
+    -- The working directory is in no git repository, so only the
+    -- explicit worktree decides where the CLI runs.
+    H.equal("", api.nvim_buf_get_name(0))
+    check_list(vim.env.REVISA_TARGET)
+elseif case == "startup" then
+    -- The shell command leaves its worktree in the environment. One
+    -- :Revisa review consumes it: the next one opens the picker instead
+    -- of reopening that worktree, and no nested Neovim inherits it.
+    H.open()
+    local origin = api.nvim_get_current_win()
+    vim.cmd("Revisa review")
+    assert(api.nvim_get_current_win() ~= origin, "list reused the window")
+    check_buffer()
+    H.equal(nil, vim.env.REVISA_REVIEW_WORKTREE)
+    vim.cmd.close()
+    H.equal(origin, api.nvim_get_current_win())
+    local offered
+    vim.ui.select = function(items, options, on_choice)
+        offered = items
+        on_choice(nil, nil)
+    end
+    vim.cmd("Revisa review")
+    assert(offered, "second :Revisa review opened no picker")
+    H.equal(origin, api.nvim_get_current_win())
 elseif case == "deleted" then
     local messages = H.notifications()
     H.open()

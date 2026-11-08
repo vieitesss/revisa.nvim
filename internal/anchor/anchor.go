@@ -60,8 +60,7 @@ func Locate(c store.Comment, source Source) (Result, error) {
 		return stored, nil
 	}
 	anchorLines := strings.Split(c.AnchorText, "\n")
-	start := nearest(strings.Split(strings.TrimSuffix(content, "\n"),
-		"\n"), anchorLines, c.LineStart)
+	start := nearest(lines(content), anchorLines, c.LineStart)
 	if start == 0 {
 		if c.Status == "open" {
 			stored.Condition = Outdated
@@ -72,6 +71,16 @@ func Locate(c store.Comment, source Source) (Result, error) {
 		LineStart: start,
 		LineEnd:   start + len(anchorLines) - 1,
 	}, nil
+}
+
+// lines splits content into its lines, so a trailing newline ends the
+// last one. Empty content has no lines at all: splitting it would make a
+// blank line that is not there, which a blank anchor would match.
+func lines(content string) []string {
+	if content == "" {
+		return nil
+	}
+	return strings.Split(strings.TrimSuffix(content, "\n"), "\n")
 }
 
 // nearest returns the 1-based line where anchor starts, choosing the match

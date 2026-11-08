@@ -37,7 +37,9 @@ local function fromSession(session)
     }
 end
 
--- fromPin is the target diff.open pinned on one of its buffers.
+-- fromPin is the target diff.open pinned on one of its buffers. The pin
+-- is only good while the buffer still has the name it was read for, so a
+-- renamed buffer falls through to the file on disk.
 local function fromPin(pin)
     local worktree = real(pin.worktree)
     return {
@@ -60,7 +62,8 @@ function M.of(buf)
         return fromSession(session)
     end
     local pin = vim.b[buf].revisa_target
-    if type(pin) == "table" then
+    if type(pin) == "table"
+        and pin.name == vim.api.nvim_buf_get_name(buf) then
         return fromPin(pin)
     end
     local context, why = buffer.context(buf)

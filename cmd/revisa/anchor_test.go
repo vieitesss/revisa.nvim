@@ -372,3 +372,58 @@ func TestNonGitListReanchorsAndMarksOutdated(t *testing.T) {
 		t.Errorf("gone: %q", out)
 	}
 }
+
+// TestListMarksABlankAnchorInAnEmptiedFileOutdated pins what "every line"
+// means for empty content: an emptied file has no lines, so a comment on
+// a blank line of it is gone. A file with content still splits on its
+// newlines, a trailing one included.
+func TestListMarksABlankAnchorInAnEmptiedFileOutdated(t *testing.T) {
+	t.Run("emptied file", func(t *testing.T) {
+		p, linked := anchorProject(t, "before\n\nafter\n")
+		addOK(t, linked, "--path", "src/a.lua", "--lines", "2",
+			"--body", "Blank line")
+		writeFile(t, linked, "src/a.lua", "")
+		got := listJSON(t, p.worktrees[0], "--branch", "feat/x")
+		if len(got) != 1 || got[0]["condition"] != "outdated" {
+			t.Fatalf("blank anchor is not outdated: %v", got)
+		}
+		for _, field := range []string{"line_start", "line_end"} {
+			if v, ok := got[0][field]; !ok || v != nil {
+				t.Errorf("%s: got %v, want null", field, v)
+			}
+		}
+		out, _, code := run(t, p.worktrees[0],
+			"list", "--branch", "feat/x", "--status", "open")
+		if code != 0 || strings.Count(out, "outdated") != 1 ||
+			!strings.Contains(out, "\nwas: \n") {
+			t.Errorf("exit %d, want outdated and was: %q", code, out)
+		}
+	})
+	for name, c := range map[string]struct {
+		content string
+		line    string
+		want    float64
+	}{
+		"blank line inside": {"before\n\nafter\n", "2", 2},
+		"blank line at EOF": {"before\nafter\n\n", "3", 3},
+		"only a newline":    {"\n", "1", 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, linked := anchorProject(t, c.content)
+			addOK(t, linked, "--path", "src/a.lua", "--lines", c.line,
+				"--body", "Blank line")
+			got := listJSON(t, p.worktrees[0], "--branch", "feat/x")
+			if len(got) != 1 {
+				t.Fatalf("want 1 comment, got %v", got)
+			}
+			if _, ok := got[0]["condition"]; ok {
+				t.Errorf("blank anchor is %v: %v",
+					got[0]["condition"], got[0])
+			}
+			if got[0]["line_start"] != c.want ||
+				got[0]["line_end"] != c.want {
+				t.Errorf("got %v, want line %v", got[0], c.want)
+			}
+		})
+	}
+}

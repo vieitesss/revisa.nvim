@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
 )
 
 // review starts Neovim in the worktree picker, keeping the working
@@ -22,11 +21,17 @@ func review(args []string, stdout, stderr io.Writer) error {
 		return usageError(fmt.Sprintf(
 			"review: unexpected argument %q", positional[1]))
 	}
-	command := "+Revisa review"
+	worktree := ""
 	if len(positional) == 1 {
-		command += " " + exEscape(positional[0])
+		worktree = positional[0]
 	}
-	cmd := exec.Command(reviewEditor(), command)
+	cmd := exec.Command(reviewEditor(), "+Revisa review")
+	// The worktree travels in the environment, which carries it verbatim.
+	// An Ex command line cannot: Neovim reads backslashes and bars in it
+	// before the command runs, so a path with a space or a pipe would
+	// reach the plugin mangled. Always set it, so a stale value in the
+	// caller's environment cannot name another worktree.
+	cmd.Env = append(os.Environ(), "REVISA_REVIEW_WORKTREE="+worktree)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
@@ -41,16 +46,4 @@ func reviewEditor() string {
 		return name
 	}
 	return "nvim"
-}
-
-var exEscaper = strings.NewReplacer(
-	`\`, `\\`,
-	" ", `\ `,
-	"|", `\|`,
-	`"`, `\"`,
-)
-
-// exEscape quotes one argument of an Ex command line.
-func exEscape(argument string) string {
-	return exEscaper.Replace(argument)
 }

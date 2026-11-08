@@ -64,9 +64,10 @@ worktree is a path or a branch. The working directory is kept, and
 
 Inside Neovim, `:Revisa review [WORKTREE]` does the same. Without a
 worktree it uses `vim.ui.select` over the project's worktrees, so no
-picker plugin is needed. It runs the CLI in the worktree of the current
-buffer's review target, so it also works from a buffer when Neovim's
-working directory is outside the project.
+picker plugin is needed. When the worktree is a directory the CLI runs
+there, so the review also works with Neovim's working directory outside
+the project; a branch name runs it in the worktree of the current
+buffer's review target.
 
 The list shows that worktree's commits since the merge-base with the
 project's default branch, plus uncommitted changes and untracked files.
@@ -147,10 +148,11 @@ require("revisa").setup({ notify = "rex" })
 With Recado, `recado` must be on `PATH`, and `:Revisa send [WORKTREE]`
 then asks you which live agent to message and sends it after you confirm.
 Without a worktree it uses the changes buffer's, the diff view's, or the
-current file's. Remote agents and Codex are not offered, since they
-cannot receive these messages. The one agent working in that worktree is
-offered first, marked as the match; anything else, or several matches,
-leaves the choice to you.
+current file's. A worktree that is a directory is where the CLI runs, so
+the send also works from outside the project. Remote agents and Codex
+are not offered, since they cannot receive these messages. The one agent
+working in that worktree is offered first, marked as the match; anything
+else, or several matches, leaves the choice to you.
 
 With Rex, `REX_SESSION` must be set and `rex` on `PATH`, and
 `:Revisa send [WORKTREE]` asks you which pane to type into. The pane your

@@ -405,26 +405,33 @@ func TestReviewStartsNeovim(t *testing.T) {
 			linked := p.worktrees[1]
 			stub := t.TempDir()
 			record := filepath.Join(stub, "argv")
+			worktreeRecord := filepath.Join(stub, "worktree")
 			writeFile(t, stub, "nvim",
 				"#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$REVISA_RECORD\"\n"+
-					"pwd >> \"$REVISA_RECORD\"\n")
+					"pwd >> \"$REVISA_RECORD\"\n"+
+					"printf '%s' \"${REVISA_REVIEW_WORKTREE-}\" > "+
+					"\"$REVISA_WORKTREE_RECORD\"\n")
 			if err := os.Chmod(filepath.Join(stub, "nvim"),
 				0o755); err != nil {
 				t.Fatal(err)
 			}
-			env := []string{"PATH=" + stub, "REVISA_RECORD=" + record}
+			env := []string{"PATH=" + stub, "REVISA_RECORD=" + record,
+				"REVISA_WORKTREE_RECORD=" + worktreeRecord}
 			if c.nvimEnvVar {
 				env = []string{"PATH=/nonexistent",
 					"REVISA_NVIM=" + filepath.Join(stub, "nvim"),
-					"REVISA_RECORD=" + record}
+					"REVISA_RECORD=" + record,
+					"REVISA_WORKTREE_RECORD=" + worktreeRecord}
 			}
 			args := []string{"review"}
-			want := []string{"+Revisa review"}
+			// The command line never carries the worktree: a path with a
+			// space or a bar must reach Neovim verbatim.
+			want := []string{"+Revisa review", realPath(t, linked)}
+			wantWorktree := ""
 			if !c.pick {
 				args = append(args, linked)
-				want[0] += " " + linked
+				wantWorktree = linked
 			}
-			want = append(want, realPath(t, linked))
 			_, stderr, code := runEnv(t, linked, env, args...)
 			if code != 0 {
 				t.Fatalf("review exit %d: %s", code, stderr)
@@ -435,31 +442,66 @@ func TestReviewStartsNeovim(t *testing.T) {
 				got[1] != want[1] {
 				t.Errorf("got %q, want %q", got, want)
 			}
+			if got := readFile(t, worktreeRecord); got != wantWorktree {
+				t.Errorf("REVISA_REVIEW_WORKTREE %q, want %q",
+					got, wantWorktree)
+			}
 		})
 	}
 }
 
-func TestReviewEscapesWorktreeInCommand(t *testing.T) {
-	p, linked := changesProject(t)
-	space := filepath.Join(t.TempDir(), "with space")
-	git(t, linked, "worktree", "add", "-q", "-b", "feat/y", space)
-	stub := t.TempDir()
-	record := filepath.Join(stub, "argv")
-	writeFile(t, stub, "nvim",
-		"#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$REVISA_RECORD\"\n")
-	if err := os.Chmod(filepath.Join(stub, "nvim"), 0o755); err != nil {
+// TestReviewOpensTheWorktreeInNeovim covers the characters an Ex command
+// line would mangle: the worktree reaches Neovim verbatim, so the plugin's
+// CLI lists that worktree and the changes buffer names its branch.
+func TestReviewOpensTheWorktreeInNeovim(t *testing.T) {
+	nvim, err := exec.LookPath("nvim")
+	if err != nil {
+		t.Fatal("review tests require Neovim 0.10+ on PATH")
+	}
+	root, err := filepath.Abs("../..")
+	if err != nil {
 		t.Fatal(err)
 	}
-	_, stderr, code := runEnv(t, p.worktrees[0], []string{
-		"PATH=" + stub,
-		"REVISA_RECORD=" + record,
-	}, "review", space)
-	if code != 0 {
-		t.Fatalf("review exit %d: %s", code, stderr)
+	gitBinary, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
 	}
-	want := "+Revisa review " + strings.ReplaceAll(space, " ", `\ `)
-	if got := strings.TrimSpace(readFile(t, record)); got != want {
-		t.Errorf("got %q, want %q", got, want)
+	wrapper := `#!/bin/sh
+exec "$REVISA_REAL_NVIM" --headless --clean \
+    --cmd "lua vim.opt.rtp:prepend(vim.env.REVISA_PLUGIN)" \
+    --cmd "set loadplugins" \
+    "$@" -c "lua dofile(vim.env.REVISA_INSPECT)"
+`
+	for _, name := range []string{
+		"with space", "with|pipe", "with'quote", `with"quote"`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, linked := changesProject(t)
+			dir := filepath.Join(t.TempDir(), name)
+			git(t, linked, "worktree", "add", "-q", "-b", "feat/w", dir)
+			stub := t.TempDir()
+			writeFile(t, stub, "nvim", wrapper)
+			if err := os.Chmod(filepath.Join(stub, "nvim"),
+				0o755); err != nil {
+				t.Fatal(err)
+			}
+			path := strings.Join([]string{stub,
+				filepath.Dir(revisa), filepath.Dir(gitBinary)},
+				string(os.PathListSeparator))
+			_, stderr, code := runEnv(t, p.worktrees[0], []string{
+				"PATH=" + path,
+				"REVISA_NVIM=" + filepath.Join(stub, "nvim"),
+				"REVISA_REAL_NVIM=" + nvim,
+				"REVISA_PLUGIN=" + root,
+				"REVISA_INSPECT=" + filepath.Join(root,
+					"testdata/nvim/review-worktree.lua"),
+				"REVISA_NAME=revisa://changes/feat/w",
+				"REVISA_EXPECT=" + realPath(t, dir),
+			}, "review", dir)
+			if code != 0 {
+				t.Fatalf("review exit %d: %s", code, stderr)
+			}
+		})
 	}
 }
 

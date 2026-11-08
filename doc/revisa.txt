@@ -107,20 +107,23 @@ COMMANDS                                                      *revisa-commands*
     side.
 
     The right side is the real file, so it stays editable and comments
-    work there as on any other real file buffer. A deleted entry has an
-    empty read-only revisa://deleted/<path> on the right, and commenting
-    there is refused like in any other virtual buffer.
+    work there as on any other real file buffer. Renaming it with :saveas
+    makes it the file it was saved as: a comment made afterwards stores
+    that name. A deleted entry has an empty read-only
+    revisa://deleted/<path> on the right, and commenting there is refused
+    like in any other virtual buffer.
 
     Revisa computes no diff: it reads the left side with git and lets
     Neovim render the comparison. A file with a NUL byte in the first
     8000 bytes of either side is reported as "revisa: <path> is binary"
     and does not open. q on the left side closes the diff tab.
 
-    The CLI of a review runs in the worktree of the current buffer's
-    review target, so :Revisa review works from any buffer of the project
-    even when Neovim's working directory is outside it. An explicit
-    [WORKTREE] only picks the worktree to list; it does not change where
-    the CLI runs.
+    The CLI of a review runs in an explicit [WORKTREE] that is a
+    directory, even when Neovim's working directory is nowhere near it.
+    A branch name is no directory, so the CLI runs in the worktree of the
+    current buffer's review target instead, else in Neovim's working
+    directory. Either way :Revisa review works from any buffer of the
+    project.
 
     The keys are buffer-local. require("revisa").review(worktree) does the
     same as the command.
@@ -159,6 +162,7 @@ COMMANDS                                                      *revisa-commands*
     [WORKTREE] is a path or a branch, as for |:Revisa-review|. Without it
     the worktree is the changes buffer's, the diff view's, or the current
     file's git worktree. The branch of that worktree goes in the message.
+    An explicit path also runs the CLI there, as for |:Revisa-review|.
 
     With notify = "recado", only live agents on this machine are offered:
     remote agents, and Codex, which cannot receive these messages, are

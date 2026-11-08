@@ -89,9 +89,12 @@ function M.close()
 end
 
 -- pin stores the review target of one diff buffer, so commenting there
--- does not ask git where the buffer is.
+-- does not ask git where the buffer is. It also stores the buffer name
+-- the target was read for: a :saveas renames the buffer, and the pinned
+-- path then names a file the buffer no longer shows.
 local function pin(buf, worktree, branch, path, side, commit)
     vim.b[buf].revisa_target = {
+        name = api.nvim_buf_get_name(buf),
         worktree = worktree,
         branch = branch,
         path = path,

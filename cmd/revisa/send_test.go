@@ -471,3 +471,25 @@ func TestBufferSendRefusesDetachedWorktree(t *testing.T) {
 		"REVISA_ERROR=is not on a branch")
 	assertNoSend(t, stub)
 }
+
+// TestBufferSendRunsInTheExplicitWorktree pins the same rule for send: an
+// explicit worktree that is a directory runs the CLI there, so a send
+// from outside git still reads that worktree and messages its branch.
+func TestBufferSendRunsInTheExplicitWorktree(t *testing.T) {
+	_, linked := changesProject(t)
+	outside := t.TempDir()
+	writeFile(t, outside, "notes.txt", "outside\n")
+	stub := recadoStub(t, agentsJSON(t,
+		stubAgent{ID: "match", Harness: "claude", Live: true, Cwd: linked},
+	))
+	sendCase(t, outside, stub,
+		"REVISA_CASE=argument",
+		"REVISA_SETTING=recado",
+		"REVISA_FILE="+filepath.Join(outside, "notes.txt"),
+		"REVISA_TARGET="+linked,
+		"REVISA_OFFERS=1",
+		"REVISA_MARKED=1",
+		"REVISA_SENT=match")
+	equalStrings(t, "argv", wantArgv("match", "feat/x"),
+		stubArgv(t, stub, 1))
+}

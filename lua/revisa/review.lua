@@ -1,5 +1,6 @@
 local M = {}
 local api = vim.api
+local uv = vim.uv
 local cli = require("revisa.cli")
 local diff = require("revisa.diff")
 local target = require("revisa.target")
@@ -24,25 +25,46 @@ local function label(branch)
     return branch
 end
 
--- runDir is where a review runs the CLI: the worktree of the current
--- buffer's target, else the working directory.
-local function runDir()
+-- explicitDir is the absolute path of a request that names an existing
+-- directory, so the CLI can run there even when Neovim's working
+-- directory is elsewhere. A branch name names no directory.
+local function explicitDir(request)
+    if request == nil or request == "" then
+        return nil
+    end
+    local info = uv.fs_stat(request)
+    if not info or info.type ~= "directory" then
+        return nil
+    end
+    return uv.fs_realpath(request) or request
+end
+
+-- M.cliDir is where the CLI runs for one request, and the worktree the
+-- request names for it to list. An explicit directory runs the CLI
+-- there; a branch name runs it in the worktree of the current buffer's
+-- target, else the working directory.
+function M.cliDir(request)
+    local dir = explicitDir(request)
+    if dir then
+        return dir, dir
+    end
     local found = target.of(api.nvim_get_current_buf())
     if found then
-        return found.cwd
+        return found.cwd, request
     end
-    return vim.fn.getcwd()
+    return vim.fn.getcwd(), request
 end
 
 -- fetchChanges reads one worktree's session changes through the CLI.
 -- request is a worktree path or branch, empty for the worktree of the
 -- current directory.
 local function fetchChanges(request)
+    local dir, named = M.cliDir(request)
     local args = { "changes", "--json" }
-    if request and request ~= "" then
-        vim.list_extend(args, { "--worktree", request })
+    if named and named ~= "" then
+        vim.list_extend(args, { "--worktree", named })
     end
-    return decode({ cwd = runDir() }, args)
+    return decode({ cwd = dir }, args)
 end
 
 -- name is the buffer name of one changes list. A detached worktree has
@@ -207,8 +229,8 @@ end
 -- M.pick offers every worktree. after, when given, receives the picked
 -- path instead of opening its review.
 function M.pick(after)
-    local worktrees = decode({ cwd = runDir() },
-        { "worktrees", "--json" })
+    local dir = M.cliDir()
+    local worktrees = decode({ cwd = dir }, { "worktrees", "--json" })
     if not worktrees then
         return
     end
@@ -230,7 +252,17 @@ function M.pick(after)
         end)
 end
 
+-- M.review opens the review of worktree, or the picker. The shell
+-- command leaves the worktree in REVISA_REVIEW_WORKTREE instead of on the
+-- Ex command line, which would mangle a path with a space or a bar. It is
+-- read once and cleared: a later :Revisa review opens the picker again,
+-- and a nested Neovim started from here inherits no worktree.
 function M.review(worktree)
+    local startup = vim.env.REVISA_REVIEW_WORKTREE
+    vim.env.REVISA_REVIEW_WORKTREE = nil
+    if worktree == nil or worktree == "" then
+        worktree = startup
+    end
     if worktree and worktree ~= "" then
         M.open(worktree)
         return

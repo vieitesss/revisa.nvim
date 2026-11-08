@@ -70,3 +70,26 @@ func TestBufferReviewKeepsTwoDetachedWorktreesApart(t *testing.T) {
 		"REVISA_TARGET_B="+b,
 		"REVISA_NAMES="+jsonLines(t, names))
 }
+
+// TestBufferRenamedDiffBufferCommentsOnItsNewName covers a :saveas on the
+// new side of a diff: the pin names the path the diff read, so it stops
+// applying once the buffer has another name, and the comment lands on the
+// file the reviewer sees.
+func TestBufferRenamedDiffBufferCommentsOnItsNewName(t *testing.T) {
+	_, linked := changesProject(t)
+	headless(t, linked, "rename.lua",
+		"REVISA_LINKED="+realPath(t, linked),
+		"REVISA_BASE="+git(t, linked, "merge-base", "main", "HEAD"))
+	got := listJSON(t, linked)
+	if len(got) != 1 {
+		t.Fatalf("want 1 comment, got %v", got)
+	}
+	for field, value := range map[string]any{
+		"path": "renamed.txt", "branch": "feat/x", "side": "new",
+		"body": "Comment on the new name",
+	} {
+		if got[0][field] != value {
+			t.Errorf("%s: got %#v, want %#v", field, got[0][field], value)
+		}
+	}
+}
