@@ -2,7 +2,21 @@ local M = {}
 local api = vim.api
 local placement = require("revisa.placement")
 local namespace = api.nvim_create_namespace("revisa.comments")
+-- drawn holds, for each buffer drawn into, what its last draw showed, so a
+-- resize can redraw it without asking the CLI again.
 local drawn = {}
+
+-- width is how many cells a comment line may take in buf: the text width
+-- of the narrowest window showing it, kept between 20 and 80.
+local function width(buf)
+    local cells = 80
+    for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+        local text = api.nvim_win_get_width(win)
+            - vim.fn.getwininfo(win)[1].textoff
+        cells = math.min(cells, text)
+    end
+    return math.max(20, cells)
+end
 
 -- buffers lists the loaded buffers this feature has drawn comments into.
 function M.buffers()
@@ -92,13 +106,18 @@ end
 function M.draw(buf, target, comments, show_resolved)
     api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
     if not target or target.kind ~= "file" then
+        drawn[buf] = nil
         return
     end
-    drawn[buf] = true
+    drawn[buf] = {
+        target = target, comments = comments, show_resolved = show_resolved,
+    }
     local count = api.nvim_buf_line_count(buf)
+    local cells = width(buf)
     local markers = {}
     for _, comment in ipairs(comments) do
-        local placed = placement.place(comment, target, count, show_resolved)
+        local placed = placement.place(comment, target, count, show_resolved,
+            cells)
         if placed.kind == "anchored" then
             anchored(buf, placed)
         elseif placed.kind == "marker" then
@@ -119,6 +138,15 @@ function M.draw(buf, target, comments, show_resolved)
         virt_text = { { summary(counts), "RevisaOutdated" } },
         virt_text_pos = "right_align",
     })
+end
+
+-- redraw draws every loaded buffer again from its last draw, for a window
+-- size change.
+function M.redraw()
+    for _, buf in ipairs(M.buffers()) do
+        local last = drawn[buf]
+        M.draw(buf, last.target, last.comments, last.show_resolved)
+    end
 end
 
 return M

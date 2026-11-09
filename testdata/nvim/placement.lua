@@ -106,7 +106,7 @@ local cases = {
 
 for _, case in ipairs(cases) do
     local got = placement.place(case.comment or comment({}),
-        case.target or newSide, case.count or 5, case.show)
+        case.target or newSide, case.count or 5, case.show, 80)
     for field, value in pairs(case.want) do
         H.equal(value, got[field])
     end
@@ -114,6 +114,41 @@ end
 
 -- A marker carries the body and the anchor text it showed instead.
 local marker = placement.place(
-    withoutLines(comment({ condition = "outdated" })), newSide, 5, false)
+    withoutLines(comment({ condition = "outdated" })), newSide, 5, false,
+    80)
 H.equal({ { { "Handle nil", "RevisaComment" } } }, marker.body)
 H.equal({ { { "was: local x = y", "RevisaWas" } } }, marker.was)
+
+-- Lines wrap at width: at the last space that fits, inside a word only
+-- when the word alone is wider, keeping the leading indent.
+local wraps = {
+    { "", 20, { "" } },
+    { "short", 20, { "short" } },
+    { "aaaa bbbb cccc dddd eeee", 10, { "aaaa bbbb", "cccc dddd", "eeee" } },
+    { "    local x = f(a, b)", 14, { "    local x =", "f(a, b)" } },
+    { "abcdefghijklmnopqrstuvwxyz", 10,
+        { "abcdefghij", "klmnopqrst", "uvwxyz" } },
+    { "one  two   three", 5, { "one", "two", "three" } },
+    { "ñandú ñandú", 6, { "ñandú", "ñandú" } },
+}
+for _, case in ipairs(wraps) do
+    H.equal(case[3], placement.wrap(case[1], case[2]))
+end
+
+-- The body, the reply and the was: lines all wrap; the prefix counts.
+local long = placement.place(withoutLines(comment({
+    condition = "outdated",
+    body = "first second third",
+    reply = "done here",
+    anchor_text = "local x = y",
+})), newSide, 5, false, 12)
+H.equal({
+    { { "first second", "RevisaComment" } },
+    { { "third", "RevisaComment" } },
+    { { "reply: done", "RevisaReply" } },
+    { { "here", "RevisaReply" } },
+}, long.body)
+H.equal({
+    { { "was: local x", "RevisaWas" } },
+    { { "= y", "RevisaWas" } },
+}, long.was)

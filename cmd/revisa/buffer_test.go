@@ -394,6 +394,17 @@ func TestBufferOpenCommentsAppearOnRead(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
 }
 
+// TestBufferCommentsWrapToWindow pins the wrap width: the window's text
+// width kept between 20 and 80, and updated when the window resizes.
+func TestBufferCommentsWrapToWindow(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "2",
+		"--body", strings.Repeat("wrapping words ", 20))
+	headless(t, p.worktrees[0], "wrap.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+}
+
 func TestBufferCommentOnRangeReservesSpace(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]

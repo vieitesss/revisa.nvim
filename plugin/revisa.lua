@@ -59,11 +59,19 @@ end)
 vim.keymap.set("x", "<Plug>(revisa-comment)",
     ":<C-u>'<,'>Revisa comment<CR>")
 
+local group = api.nvim_create_augroup("revisa", { clear = true })
 api.nvim_create_autocmd("BufReadPost", {
-    group = api.nvim_create_augroup("revisa", { clear = true }),
+    group = group,
     callback = function(event)
         if require("revisa.buffer").file(event.buf) then
             require("revisa").refresh(event.buf)
         end
+    end,
+})
+
+api.nvim_create_autocmd({ "WinResized", "VimResized" }, {
+    group = group,
+    callback = function()
+        require("revisa.display").redraw()
     end,
 })

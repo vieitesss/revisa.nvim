@@ -5,31 +5,71 @@ local function line(text, group)
     return { { text, group } }
 end
 
--- lines splits text into virtual lines of one highlight group.
-local function lines(text, group)
+-- wrap breaks one line of text into lines of at most width cells. A
+-- break goes after the last space that fits, else inside the word; the
+-- spaces at a break are dropped, and the leading indent is kept.
+function M.wrap(text, width)
+    local out = {}
+    local chars = vim.fn.split(text, "\\zs")
+    while vim.fn.strdisplaywidth(table.concat(chars)) > width do
+        local used, fit, space = 0, 0, nil
+        for index, char in ipairs(chars) do
+            used = used + vim.fn.strdisplaywidth(char)
+            if used > width then
+                break
+            end
+            fit = index
+            if char == " " and chars[index - 1] ~= nil
+                and chars[index - 1] ~= " "
+            then
+                space = index
+            end
+        end
+        local stop, start = math.max(fit, 1), math.max(fit, 1) + 1
+        if chars[fit + 1] == " " then
+            stop = fit
+        elseif space then
+            stop, start = space - 1, space + 1
+        end
+        out[#out + 1] = (table.concat(chars, "", 1, stop):gsub(" +$", ""))
+        while chars[start] == " " do
+            start = start + 1
+        end
+        chars = vim.list_slice(chars, start)
+    end
+    out[#out + 1] = table.concat(chars)
+    return out
+end
+
+-- lines splits text into virtual lines of one highlight group, each
+-- wrapped to width. prefix starts the first line.
+local function lines(text, group, width, prefix)
     local out = {}
     if type(text) ~= "string" then
         return out
     end
-    for _, current in ipairs(vim.split(text, "\n", { plain = true })) do
-        out[#out + 1] = line(current, group)
+    local split = vim.split(text, "\n", { plain = true })
+    split[1] = (prefix or "") .. split[1]
+    for _, current in ipairs(split) do
+        for _, wrapped in ipairs(M.wrap(current, width)) do
+            out[#out + 1] = line(wrapped, group)
+        end
     end
     return out
 end
 
 -- body_lines is the comment body, then its reply when it has one.
-local function body_lines(comment)
-    local out = lines(comment.body, "RevisaComment")
+local function body_lines(comment, width)
+    local out = lines(comment.body, "RevisaComment", width)
     if type(comment.reply) == "string" then
-        local reply = lines(comment.reply, "RevisaReply")
-        reply[1][1][1] = "reply: " .. reply[1][1][1]
-        vim.list_extend(out, reply)
+        vim.list_extend(out,
+            lines(comment.reply, "RevisaReply", width, "reply: "))
     end
     return out
 end
 
 -- was_lines is the anchor text, as a marker shows it instead of a line.
-local function was_lines(comment)
+local function was_lines(comment, width)
     local out = {}
     if type(comment.anchor_text) ~= "string" then
         return out
@@ -37,7 +77,7 @@ local function was_lines(comment)
     for _, current in ipairs(vim.split(comment.anchor_text, "\n",
         { plain = true }))
     do
-        out[#out + 1] = line("was: " .. current, "RevisaWas")
+        vim.list_extend(out, lines(current, "RevisaWas", width, "was: "))
     end
     return out
 end
@@ -46,14 +86,14 @@ local function hidden(why)
     return { kind = "hidden", why = why }
 end
 
-local function anchored(comment, resolved)
+local function anchored(comment, resolved, width)
     local placed = {
         kind = "anchored",
         sign = ">",
         group = "RevisaSign",
         line_start = comment.line_start,
         line_end = comment.line_end,
-        body = body_lines(comment),
+        body = body_lines(comment, width),
     }
     if resolved then
         placed.sign, placed.group = "✓", "RevisaResolved"
@@ -62,9 +102,10 @@ local function anchored(comment, resolved)
 end
 
 -- place says where one comment goes in the file version target shows.
--- line_count is the buffer's line count. The rules apply in order, and a
--- comment with no current lines is hidden, never clamped to the file.
-function M.place(comment, target, line_count, show_resolved)
+-- line_count is the buffer's line count, and width the cells a virtual
+-- line may take. The rules apply in order, and a comment with no current
+-- lines is hidden, never clamped to the file.
+function M.place(comment, target, line_count, show_resolved, width)
     if not target or target.kind ~= "file" then
         return hidden("not a file target")
     end
@@ -84,15 +125,15 @@ function M.place(comment, target, line_count, show_resolved)
         return {
             kind = "marker",
             condition = comment.condition,
-            body = body_lines(comment),
-            was = was_lines(comment),
+            body = body_lines(comment, width),
+            was = was_lines(comment, width),
         }
     end
     if type(comment.line_end) ~= "number" or comment.line_end > line_count
     then
         return hidden("no current lines")
     end
-    return anchored(comment, comment.status == "resolved")
+    return anchored(comment, comment.status == "resolved", width)
 end
 
 return M

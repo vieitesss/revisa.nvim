@@ -253,6 +253,12 @@ and is not written by :write. |:Revisa-refresh| redraws it, and when the
 anchor text comes back the comment returns to its line with no marker. The
 empty new side of a deleted file in the diff view shows the same block.
 
+Virtual lines never wrap with 'wrap', so revisa wraps every body, reply and
+was: line itself. The width is the text width of the narrowest window
+showing the buffer, kept between 20 and 80 columns. A line breaks after
+the last space that fits, or inside a word wider than the width, and keeps
+its leading indent. Resizing a window wraps the comments again.
+
 Old-side comments are drawn on the old side of the diff view, when the diff
 opens and again after a comment is added there. A new-side buffer never
 shows them. The base commit pins them: when the base has moved, as after a
