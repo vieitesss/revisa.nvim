@@ -24,6 +24,7 @@ const usage = `usage: revisa <command> [flags]
 commands:
   list (ls) print the current branch's comments (--branch, --status)
   add       comment on lines of a file
+  edit      replace a comment's body (--body)
   resolve   resolve a comment with a reply
   prune     delete resolved comments (--branch)
   migrate   move .revisa/ comments into the git store (--branch)
@@ -61,6 +62,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		err = list(args[1:], stdout, stderr)
 	case "add":
 		err = add(args[1:], stdout, stderr)
+	case "edit":
+		err = edit(args[1:], stdout, stderr)
 	case "resolve":
 		err = resolve(args[1:], stdout, stderr)
 	case "prune":
@@ -369,6 +372,39 @@ func parseLines(s string) (start, end int, err error) {
 			"add: --lines must be N or N-M with 1 <= N <= M, got %q", s))
 	}
 	return start, end, nil
+}
+
+// edit replaces the body of one comment, open or resolved. Its anchor,
+// status and reply stay as they are.
+func edit(args []string, stdout, stderr io.Writer) error {
+	fl := flag.NewFlagSet("edit", flag.ContinueOnError)
+	fl.SetOutput(stderr)
+	body := fl.String("body", "", "the new comment")
+	positional, err := parse(fl, args)
+	if err != nil {
+		return err
+	}
+	if len(positional) != 1 {
+		return usageError("edit: pass exactly one comment id")
+	}
+	if strings.TrimSpace(*body) == "" {
+		return usageError("edit: --body is required")
+	}
+
+	p, err := findProject()
+	if err != nil {
+		return err
+	}
+	c, err := store.Get(p.Store, positional[0])
+	if err != nil {
+		return fmt.Errorf("edit: %w", err)
+	}
+	c.Body = *body
+	if err := store.Save(p.Store, c); err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "edited %s\n", c.ID)
+	return nil
 }
 
 func resolve(args []string, stdout, stderr io.Writer) error {

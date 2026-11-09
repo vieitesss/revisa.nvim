@@ -54,6 +54,19 @@ COMMANDS                                                      *revisa-commands*
     that path stores the old path. The right side of a deleted file stores
     nothing and reports that the path is not found in the worktree.
 
+:Revisa edit                                                     *:Revisa-edit*
+    Change the body of a drawn comment. With the cursor on a line of an
+    anchored comment, that comment opens in the |revisa-editor|, holding
+    its body; with several there, pick one with |vim.ui.select|. With the
+    cursor on no comment, pick from every comment drawn in the buffer,
+    the outdated and unknown ones of the end block included. Each choice
+    is labelled with its lines, or its condition, and its first body line.
+
+    Saving stores the new body with `revisa edit <id> --body <text>`. The
+    anchor, status and reply stay. Saving an empty body or pressing q
+    keeps the old body. A resolved comment can be edited while
+    |:Revisa-resolved| shows it.
+
 :Revisa refresh                                               *:Revisa-refresh*
     Reload comments for the current file.
 
@@ -184,7 +197,9 @@ stderr. For example, a detached HEAD is reported rather than guessing a branch.
 ==============================================================================
 COMMENT EDITOR                                                  *revisa-editor*
 
-The editor is a multiline floating buffer below the last selected line.
+The editor is a multiline floating buffer below the last selected line, or
+below the comment's last line for |:Revisa-edit|, where it starts with the
+current body. An end-block comment edits below the last line of the file.
 Empty virtual lines reserve space in the file window; the float occupies that
 space and does not cover file lines. The file window may scroll to make room.
 
@@ -208,10 +223,14 @@ MAPPINGS                                                      *revisa-mappings*
     Normal mode: comment on the current line.
     Visual mode: comment on the selected line range.
 
+<Plug>(revisa-edit)                                        *<Plug>(revisa-edit)*
+    Normal mode: |:Revisa-edit|.
+
 There are no default keymaps. Example user mappings: >
 
     vim.keymap.set("n", "<leader>rc", "<Plug>(revisa-comment)")
     vim.keymap.set("x", "<leader>rc", "<Plug>(revisa-comment)")
+    vim.keymap.set("n", "<leader>re", "<Plug>(revisa-edit)")
     vim.keymap.set("n", "<leader>rr", "<cmd>Revisa review<cr>")
 <
 The changes buffer adds its own buffer-local <CR>, o, R and q keys.

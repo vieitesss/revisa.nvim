@@ -32,6 +32,8 @@ api.nvim_create_user_command("Revisa", function(command)
     end
     if name == "comment" then
         require("revisa").comment(command.line1, command.line2)
+    elseif name == "edit" then
+        require("revisa").edit()
     elseif name == "refresh" then
         require("revisa").refresh()
     elseif name == "resolved" then
@@ -42,13 +44,15 @@ api.nvim_create_user_command("Revisa", function(command)
         require("revisa").send(rest)
     else
         require("revisa.cli").error(
-            "revisa: use comment, refresh, resolved, review or send")
+            "revisa: use comment, edit, refresh, resolved, review or send")
     end
 end, {
     nargs = "*",
     range = true,
     complete = function()
-        return { "comment", "refresh", "resolved", "review", "send" }
+        return {
+            "comment", "edit", "refresh", "resolved", "review", "send",
+        }
     end,
 })
 
@@ -58,6 +62,10 @@ vim.keymap.set("n", "<Plug>(revisa-comment)", function()
 end)
 vim.keymap.set("x", "<Plug>(revisa-comment)",
     ":<C-u>'<,'>Revisa comment<CR>")
+
+vim.keymap.set("n", "<Plug>(revisa-edit)", function()
+    require("revisa").edit()
+end)
 
 local group = api.nvim_create_augroup("revisa", { clear = true })
 api.nvim_create_autocmd("BufReadPost", {

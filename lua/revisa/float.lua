@@ -2,7 +2,9 @@ local M = {}
 local api = vim.api
 local padding = api.nvim_create_namespace("revisa.padding")
 
-function M.open(buf, last, save)
+-- open shows the comment editor below line last of buf, holding body when
+-- one is given. save gets the text on :w and returns true when it stored it.
+function M.open(buf, last, save, body)
     local source = api.nvim_get_current_win()
     local text = api.nvim_buf_get_lines(buf, last - 1, last, false)[1]
     local column = math.max(0, #text - 1)
@@ -47,6 +49,11 @@ function M.open(buf, last, save)
     vim.bo[editor].bufhidden = "wipe"
     vim.bo[editor].swapfile = false
     api.nvim_buf_set_name(editor, "revisa-comment://" .. editor)
+    if body then
+        api.nvim_buf_set_lines(editor, 0, -1, false,
+            vim.split(body, "\n", { plain = true }))
+        vim.bo[editor].modified = false
+    end
     local win = api.nvim_open_win(editor, true, {
         relative = "editor",
         row = position.row,
