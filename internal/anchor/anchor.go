@@ -73,9 +73,6 @@ func Locate(c store.Comment, source Source) (Result, error) {
 	}, nil
 }
 
-// lines splits content into its lines, so a trailing newline ends the
-// last one. Empty content has no lines at all: splitting it would make a
-// blank line that is not there, which a blank anchor would match.
 func lines(content string) []string {
 	if content == "" {
 		return nil
@@ -83,8 +80,6 @@ func lines(content string) []string {
 	return strings.Split(strings.TrimSuffix(content, "\n"), "\n")
 }
 
-// nearest returns the 1-based line where anchor starts, choosing the match
-// closest to line and the earlier one on a tie, or 0 when there is none.
 func nearest(lines, anchor []string, line int) int {
 	best, distance := 0, 0
 	for i := 0; i+len(anchor) <= len(lines); i++ {

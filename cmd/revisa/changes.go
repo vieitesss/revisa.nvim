@@ -12,8 +12,6 @@ import (
 	"github.com/vieitesss/revisa.nvim/internal/project"
 )
 
-// gitDir returns the directory git commands run in for the working
-// directory, which must be inside a git repository.
 func gitDir() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -180,8 +178,6 @@ func changes(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-// pickWorktree returns the worktree the target names, or the one that
-// holds the working directory when target is empty.
 func pickWorktree(dir string, list []git.Worktree, target string) (
 	git.Worktree, error) {
 	if target == "" {

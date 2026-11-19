@@ -8,8 +8,6 @@ import (
 	"os/exec"
 )
 
-// review starts Neovim in the worktree picker, keeping the working
-// directory. REVISA_NVIM chooses another editor command.
 func review(args []string, stdout, stderr io.Writer) error {
 	fl := flag.NewFlagSet("review", flag.ContinueOnError)
 	fl.SetOutput(stderr)

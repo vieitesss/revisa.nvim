@@ -37,7 +37,6 @@ func Worktrees(dir string) ([]Worktree, error) {
 				wt.Branch = strings.TrimPrefix(strings.TrimPrefix(
 					field, "branch "), "refs/heads/")
 			}
-			// "detached" and "locked" add nothing to an entry.
 		}
 		if wt.Path != "" {
 			worktrees = append(worktrees, wt)
@@ -69,7 +68,6 @@ func At(list []Worktree, dir string) (Worktree, bool) {
 	return Worktree{}, false
 }
 
-// holds reports whether dir is root or inside it.
 func holds(root, dir string) bool {
 	rel, err := filepath.Rel(root, dir)
 	return err == nil && rel != ".." &&
@@ -97,8 +95,6 @@ func Named(list []Worktree, path, branch string) (Worktree, bool) {
 	return Worktree{}, false
 }
 
-// sameDir reports whether two paths name the same directory, resolving
-// symlinks when both exist.
 func sameDir(a, b string) bool {
 	if a == b {
 		return true
@@ -130,7 +126,6 @@ func DefaultBranch(dir string) (string, error) {
 		strings.Join(tried, ", "))
 }
 
-// remoteHead returns the branch refs/remotes/origin/HEAD names, or "".
 func remoteHead(dir string) string {
 	out, err := run(dir, "symbolic-ref", "--quiet",
 		"refs/remotes/origin/HEAD")
@@ -140,7 +135,6 @@ func remoteHead(dir string) string {
 	return strings.TrimPrefix(strings.TrimSpace(out), "refs/remotes/origin/")
 }
 
-// configuredDefaultBranch returns init.defaultBranch, or "".
 func configuredDefaultBranch(dir string) string {
 	out, err := run(dir, "config", "--get", "init.defaultBranch")
 	if err != nil {
@@ -217,7 +211,6 @@ func parseNameStatus(out string) []Change {
 			}
 			i += 2
 		case "C":
-			// A copy reads as a modification of its new path.
 			if i+2 < len(fields) {
 				changes = append(changes, Change{
 					Status: "M", Path: fields[i+2]})
@@ -230,7 +223,6 @@ func parseNameStatus(out string) []Change {
 			}
 			i++
 		default:
-			// A type change reads as a modification.
 			if i+1 < len(fields) {
 				changes = append(changes, Change{
 					Status: "M", Path: fields[i+1]})

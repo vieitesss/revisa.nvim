@@ -90,8 +90,6 @@ func run(args []string, stdout, stderr io.Writer) error {
 	return err
 }
 
-// parse parses flags placed before, after or between positional
-// arguments, and returns the positional ones.
 func parse(fl *flag.FlagSet, args []string) ([]string, error) {
 	var positional []string
 	for {
@@ -203,8 +201,6 @@ func list(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-// listed is a comment as `list` prints it: its stored fields, where its
-// anchor text is now, and why its lines are unknown.
 type listed struct {
 	store.Comment
 	LineStart *int   `json:"line_start"`
@@ -374,8 +370,6 @@ func parseLines(s string) (start, end int, err error) {
 	return start, end, nil
 }
 
-// edit replaces the body of one comment, open or resolved. Its anchor,
-// status and reply stay as they are.
 func edit(args []string, stdout, stderr io.Writer) error {
 	fl := flag.NewFlagSet("edit", flag.ContinueOnError)
 	fl.SetOutput(stderr)
