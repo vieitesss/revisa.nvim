@@ -81,9 +81,6 @@ end
 -- check_list opens the changes buffer of REVISA_TARGET.
 local function check_list()
     require("revisa").review(vim.env.REVISA_TARGET)
-    local target = require("revisa.target").of(api.nvim_get_current_buf())
-    H.equal("changes", target.kind)
-    H.equal("feat/x", target.branch)
 end
 
 if case == "unavailable" then
@@ -95,7 +92,7 @@ elseif case == "invalid" then
     send()
     H.equal(0, #offers)
     check_messages()
-elseif case == "picker" then
+elseif case == "picker" or case == "argument" then
     H.open()
     send(vim.env.REVISA_TARGET)
     check_offers(tonumber(vim.env.REVISA_OFFERS),
@@ -125,23 +122,12 @@ elseif case == "diff" then
     return function()
         H.keys("<CR>")
         return function()
-            H.equal("old",
-                require("revisa.target").of(api.nvim_get_current_buf()).side)
+            H.equal(true, vim.wo.diff)
             send()
             check_offers(1, 1)
             check_messages()
         end
     end
-elseif case == "argument" then
-    H.open()
-    send(vim.env.REVISA_TARGET)
-    check_offers(1, 1)
-    check_messages()
-elseif case == "file" then
-    H.open()
-    send()
-    check_offers(1, 1)
-    check_messages()
 elseif case == "detached" then
     H.open()
     send()

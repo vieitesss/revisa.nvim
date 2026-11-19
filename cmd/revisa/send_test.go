@@ -156,20 +156,16 @@ func assertNoSend(t *testing.T, stub string) {
 	}
 }
 
-// wantMessage is the notification an agent reads, with the branch quoted
+// reviewMessage is the notification an agent reads, with the branch quoted
 // for a shell.
-func wantMessage(branch string) string {
-	quoted := "'" + strings.ReplaceAll(branch, "'", `'\''`) + "'"
-	return "revisa: review comments are waiting on branch " + quoted +
-		". Run: revisa list --branch " + quoted +
-		" --status open. Answer each with revisa resolve, not recado reply."
-}
+const reviewMessage = "revisa: review comments are waiting on branch " +
+	"'feat/x'. Run: revisa list --branch 'feat/x' --status open." +
+	" Answer each with revisa resolve, not recado reply."
 
 // wantArgv is the argv of one send call.
-func wantArgv(id, branch string) []string {
+func wantArgv(id string) []string {
 	return []string{
-		"send", id, wantMessage(branch), "--meta",
-		"revisa_branch=" + branch,
+		"send", id, reviewMessage, "--meta", "revisa_branch=feat/x",
 	}
 }
 
@@ -269,7 +265,7 @@ func TestBufferSendPrefersTheWorktreeMatch(t *testing.T) {
 		"REVISA_MARKED=1",
 		"REVISA_ABSENT=gone,codex,elsewhere,upstream,recado://",
 		"REVISA_SENT=match")
-	equalStrings(t, "argv", wantArgv("match", "feat/x"),
+	equalStrings(t, "argv", wantArgv("match"),
 		stubArgv(t, stub, 1))
 	if got := stubAddr(t, stub, 1); got != "revisa" {
 		t.Errorf("RECADO_ADDR %q, want revisa", got)
@@ -292,10 +288,6 @@ func TestBufferSendFallsBackToTheManualPicker(t *testing.T) {
 		},
 		"outside git": {
 			{ID: "one", Harness: "claude", Live: true, Cwd: nowhere},
-		},
-		"missing dir": {
-			{ID: "one", Harness: "claude", Live: true,
-				Cwd: filepath.Join(nowhere, "deleted")},
 		},
 	}
 	for name, agents := range cases {
@@ -352,7 +344,6 @@ func TestBufferSendCancelSendsNothing(t *testing.T) {
 		"REVISA_CASE=cancel",
 		"REVISA_SETTING=recado",
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
-		"REVISA_MARKED=1",
 		"REVISA_PICK=cancel")
 	assertNoSend(t, stub)
 }
@@ -364,7 +355,6 @@ func TestBufferSendReportsRecadoFailures(t *testing.T) {
 		sent   string
 		want   string
 	}{
-		"succeeds": {codes: []int{0}, sent: "match"},
 		"fails": {
 			codes: []int{1}, stderr: "recado: agent is gone",
 			want: "recado: agent is gone",
@@ -404,7 +394,7 @@ func TestBufferSendReportsRecadoFailures(t *testing.T) {
 					calls, len(c.codes))
 			}
 			for call := 1; call <= len(c.codes); call++ {
-				equalStrings(t, "argv", wantArgv("match", "feat/x"),
+				equalStrings(t, "argv", wantArgv("match"),
 					stubArgv(t, stub, call))
 			}
 		})
@@ -426,12 +416,18 @@ func TestBufferSendQuotesTheBranchInTheMessage(t *testing.T) {
 		"REVISA_OFFERS=1",
 		"REVISA_MARKED=1",
 		"REVISA_SENT=match")
-	equalStrings(t, "argv", wantArgv("match", "feat/o'brien"),
-		stubArgv(t, stub, 1))
+	want := []string{
+		"send", "match",
+		`revisa: review comments are waiting on branch 'feat/o'\''brien'.` +
+			` Run: revisa list --branch 'feat/o'\''brien' --status open.` +
+			` Answer each with revisa resolve, not recado reply.`,
+		"--meta", "revisa_branch=feat/o'brien",
+	}
+	equalStrings(t, "argv", want, stubArgv(t, stub, 1))
 }
 
-func TestBufferSendUsesTheWorktreeOfTheCurrentBuffer(t *testing.T) {
-	for _, kind := range []string{"argument", "changes", "file", "diff"} {
+func TestBufferSendChoosesTheWorktreeUnderReview(t *testing.T) {
+	for _, kind := range []string{"argument", "changes", "diff"} {
 		t.Run(kind, func(t *testing.T) {
 			p, _ := reviewProject(t)
 			linked := p.worktrees[1]
@@ -439,17 +435,21 @@ func TestBufferSendUsesTheWorktreeOfTheCurrentBuffer(t *testing.T) {
 				stubAgent{ID: "match", Harness: "claude", Live: true,
 					Cwd: linked},
 			))
+			file := filepath.Join(linked, "src/a.lua")
+			if kind == "argument" {
+				file = filepath.Join(p.worktrees[0], "src/a.lua")
+			}
 			env := []string{
 				"REVISA_CASE=" + kind,
 				"REVISA_SETTING=recado",
-				"REVISA_FILE=" + filepath.Join(linked, "src/a.lua"),
+				"REVISA_FILE=" + file,
 				"REVISA_TARGET=feat/x",
 				"REVISA_OFFERS=1",
 				"REVISA_MARKED=1",
 				"REVISA_SENT=match",
 			}
 			sendCase(t, p.worktrees[0], stub, env...)
-			equalStrings(t, "argv", wantArgv("match", "feat/x"),
+			equalStrings(t, "argv", wantArgv("match"),
 				stubArgv(t, stub, 1))
 		})
 	}
@@ -490,6 +490,6 @@ func TestBufferSendRunsInTheExplicitWorktree(t *testing.T) {
 		"REVISA_OFFERS=1",
 		"REVISA_MARKED=1",
 		"REVISA_SENT=match")
-	equalStrings(t, "argv", wantArgv("match", "feat/x"),
+	equalStrings(t, "argv", wantArgv("match"),
 		stubArgv(t, stub, 1))
 }

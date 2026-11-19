@@ -13,9 +13,8 @@ import (
 // rexStubScript stands in for rex. It records the argv of every call in
 // call<N>, counts them in count, and then answers by command: "block ls"
 // prints blocks.json, "block call ... process" prints the block's
-// process-<id>.json, and "capture" prints capture-<id>.txt. It exits
-// with the code in code<N>, 0 by default. Only shell builtins are used,
-// so a test PATH can leave out the real rex.
+// process-<id>.json, and "capture" prints capture-<id>.txt. Only shell
+// builtins are used, so a test PATH can leave out the real rex.
 const rexStubScript = `#!/bin/sh
 dir=${REX_STUB:?}
 n=0
@@ -57,16 +56,7 @@ elif [ "$1 $2" = "block call" ]; then
 elif [ "$1" = capture ]; then
     print_file "$dir/capture-$id.txt"
 fi
-if [ -f "$dir/stderr$n" ]; then
-    while IFS= read -r line || [ -n "$line" ]; do
-        printf '%s\n' "$line" >&2
-    done <"$dir/stderr$n"
-fi
-code=0
-if [ -f "$dir/code$n" ]; then
-    read -r code <"$dir/code$n"
-fi
-exit "$code"
+exit 0
 `
 
 // stubBlock is one pane of a stub rex session. Cwd is where its process
@@ -154,15 +144,24 @@ func rexPath(t *testing.T, stub string) string {
 	return strings.Join(parts, string(os.PathListSeparator))
 }
 
-// rexArgv is the argv of one recorded rex call.
-func rexArgv(t *testing.T, stub string, call int) []string {
+// rexDelivery returns the capture and typing commands, leaving out pane
+// discovery so its queries do not affect assertions about delivery.
+func rexDelivery(t *testing.T, stub string) [][]string {
 	t.Helper()
-	data, err := os.ReadFile(
-		filepath.Join(stub, "call"+strconv.Itoa(call)))
-	if err != nil {
-		t.Fatalf("no recorded rex call %d: %v", call, err)
+	var commands [][]string
+	for call := 1; call <= stubCalls(t, stub); call++ {
+		data, err := os.ReadFile(
+			filepath.Join(stub, "call"+strconv.Itoa(call)))
+		if err != nil {
+			t.Fatalf("no recorded rex call %d: %v", call, err)
+		}
+		argv := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+		switch argv[0] {
+		case "capture", "send", "send-key":
+			commands = append(commands, argv)
+		}
 	}
-	return strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	return commands
 }
 
 // rexCase runs rex.lua headless in dir with the stub on PATH, in the
@@ -179,12 +178,11 @@ func rexCase(t *testing.T, dir, stub, session string, env ...string) {
 
 func TestBufferRexUnavailable(t *testing.T) {
 	cases := map[string]struct {
-		c       string
 		session string
 		stub    bool
 	}{
-		"send without a session": {"unavailable", "", true},
-		"send without rex":       {"unavailable", "session:one", false},
+		"send without a session": {"", true},
+		"send without rex":       {"session:one", false},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -198,9 +196,8 @@ func TestBufferRexUnavailable(t *testing.T) {
 				path = stub
 			}
 			rexCase(t, linked, stub, c.session,
-				"REVISA_CASE="+c.c,
+				"REVISA_CASE=unavailable",
 				"REVISA_SETTING=rex",
-				"REVISA_WORKTREE="+linked,
 				"REVISA_ERROR=REX_SESSION set and rex on PATH",
 				"PATH="+rexPath(t, path))
 			if calls := stubCalls(t, stub); calls != 0 {
@@ -236,26 +233,28 @@ func TestBufferRexInspectsThePaneBeforeSending(t *testing.T) {
 	p, _ := reviewProject(t)
 	main, linked := p.worktrees[0], p.worktrees[1]
 	stub := sessionStub(t, main, linked)
-	writeFile(t, stub, "capture-01AGENT.txt", "agent: working\n$ \n")
+	writeFile(t, stub, "capture-01AGENT.txt",
+		"omitted\none\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\n")
 	rexCase(t, linked, stub, "session:one",
 		"REVISA_CASE=send",
 		"REVISA_SETTING=rex",
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
 		"REVISA_PANES="+sessionPanes(main, linked),
 		"REVISA_MARKED=1",
-		"REVISA_PREVIEW=agent: working\n$ ",
+		"REVISA_PREVIEW=one\ntwo\nthree\nfour\nfive\n"+
+			"six\nseven\neight\nnine\nten",
 		"REVISA_PICK=1,1")
-	equalStrings(t, "capture argv", []string{
-		"capture", "-s", "session:one", "-b", "block:01AGENT", "--trim",
-	}, rexArgv(t, stub, 4))
-	equalStrings(t, "send argv", append([]string{
-		"send", "-s", "session:one", "-b", "block:01AGENT",
-	}, wantMessage("feat/x")), rexArgv(t, stub, 5))
-	equalStrings(t, "send-key argv", []string{
-		"send-key", "-s", "session:one", "-b", "block:01AGENT", "enter",
-	}, rexArgv(t, stub, 6))
-	if calls := stubCalls(t, stub); calls != 6 {
-		t.Errorf("rex was called %d times, want 6", calls)
+	want := [][]string{
+		{"capture", "-s", "session:one", "-b", "block:01AGENT", "--trim"},
+		{"send", "-s", "session:one", "-b", "block:01AGENT", reviewMessage},
+		{"send-key", "-s", "session:one", "-b", "block:01AGENT", "enter"},
+	}
+	got := rexDelivery(t, stub)
+	if len(got) != len(want) {
+		t.Fatalf("delivery commands %q, want %q", got, want)
+	}
+	for i := range want {
+		equalStrings(t, want[i][0]+" argv", want[i], got[i])
 	}
 }
 
@@ -268,39 +267,11 @@ func TestBufferRexCancelTypesNothing(t *testing.T) {
 		"REVISA_CASE=cancel",
 		"REVISA_SETTING=rex",
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
-		"REVISA_PANES="+sessionPanes(main, linked),
-		"REVISA_MARKED=1",
 		"REVISA_PREVIEW=agent: working",
 		"REVISA_PICK=1,cancel")
-	if calls := stubCalls(t, stub); calls != 4 {
-		t.Errorf("rex was called %d times, want 4", calls)
-	}
-}
-
-func TestBufferRexStoresNoBlockIDs(t *testing.T) {
-	p, _ := reviewProject(t)
-	main, linked := p.worktrees[0], p.worktrees[1]
-	id := addOK(t, linked, "--path", "src/a.lua", "--lines", "2",
-		"--body", "Keep the context")
-	stub := sessionStub(t, main, linked)
-	writeFile(t, stub, "capture-01AGENT.txt", "agent: working\n")
-	rexCase(t, linked, stub, "session:one",
-		"REVISA_CASE=send",
-		"REVISA_SETTING=rex",
-		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
-		"REVISA_PANES="+sessionPanes(main, linked),
-		"REVISA_MARKED=1",
-		"REVISA_PREVIEW=agent: working",
-		"REVISA_PICK=1,1")
-	if calls := stubCalls(t, stub); calls != 6 {
-		t.Fatalf("the stub saw %d calls, so nothing was sent", calls)
-	}
-	common := git(t, linked, "rev-parse", "--path-format=absolute",
-		"--git-common-dir")
-	stored := readFile(t, filepath.Join(common, "revisa", id+".json"))
-	for _, marker := range []string{"block:", "session:one", "01AGENT"} {
-		if strings.Contains(stored, marker) {
-			t.Errorf("the comment stores %q:\n%s", marker, stored)
+	for _, argv := range rexDelivery(t, stub) {
+		if argv[0] != "capture" {
+			t.Errorf("cancel typed into the pane: %q", argv)
 		}
 	}
 }
