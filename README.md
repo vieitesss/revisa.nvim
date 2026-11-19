@@ -45,8 +45,9 @@ plugin loads. See `:help revisa-install`.
 2. Comment: `:Revisa comment` on a line, or `:'<,'>Revisa comment` on a
    selection. Write the body and save it with `:w`.
 3. Tell the agent: `:Revisa send` lists the agents you can reach and points
-   the one you pick at the waiting comments. It needs Rex or Recado, and
-   uses Rex when Neovim runs inside Rex, else Recado. To pick one, call
+   the one you pick at the waiting comments. It needs Rex or Recado. It
+   uses Rex when `REX_SESSION` is set and `rex` is on `PATH`, else Recado
+   when it is on `PATH`. To pick one, call
    `require("revisa").setup({ notify = "rex" })`, or `"recado"`, or `"none"`
    to turn sending off.
 4. The agent reads the comments with `revisa list` and answers each one

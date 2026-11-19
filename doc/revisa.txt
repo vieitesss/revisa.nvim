@@ -195,9 +195,9 @@ COMMANDS                                                      *revisa-commands*
 :Revisa send [WORKTREE]                                         *:Revisa-send*
     Tell an agent that comments are waiting on a branch. It reaches the
     agent through a notifier, Rex or Recado, chosen by notify in
-    |revisa-setup|. By default it uses Rex when Neovim runs inside Rex,
-    else Recado. A notifier that is not available reports why and sends
-    nothing.
+    |revisa-setup|. By default it uses Rex when REX_SESSION is set and rex
+    is on PATH, else Recado when recado is on PATH. A notifier that is not
+    available reports why and sends nothing.
 
     [WORKTREE] is a path or a branch, as for |:Revisa-review|. Without it
     the worktree is the changes buffer's, the diff view's, or the current
