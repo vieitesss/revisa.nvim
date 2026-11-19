@@ -1,5 +1,3 @@
--- A long comment wraps to the window's text width, at most 80 cells and
--- at least 20, and wraps again when the window changes size.
 vim.o.columns, vim.o.lines = 120, 30
 local buf, win = H.open()
 

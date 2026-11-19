@@ -10,10 +10,6 @@ import (
 	"testing"
 )
 
-// recadoStubScript stands in for recado. "agents" prints agents.json;
-// "send" records its argv and address in send<N> and addr<N>, then exits
-// with the code in code<N>, 0 by default. Only shell builtins are used,
-// so a test PATH can leave out the real recado.
 const recadoStubScript = `#!/bin/sh
 dir=${RECADO_STUB:?}
 if [ "$1" = agents ]; then
@@ -54,7 +50,6 @@ type stubAgent struct {
 	Remote  string `json:"remote,omitempty"`
 }
 
-// agentsJSON is what the stub recado prints for "agents --json".
 func agentsJSON(t *testing.T, agents ...stubAgent) string {
 	t.Helper()
 	if agents == nil {
@@ -67,8 +62,6 @@ func agentsJSON(t *testing.T, agents ...stubAgent) string {
 	return string(data)
 }
 
-// recadoStub writes the stub into a directory of its own, so it shadows
-// any recado installed on the machine.
 func recadoStub(t *testing.T, agents string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -80,7 +73,6 @@ func recadoStub(t *testing.T, agents string) string {
 	return dir
 }
 
-// stubCodes sets the exit code of the given send calls, in order.
 func stubCodes(t *testing.T, stub string, codes ...int) {
 	t.Helper()
 	for i, code := range codes {
@@ -94,8 +86,6 @@ func stubStderr(t *testing.T, stub string, call int, message string) {
 	writeFile(t, stub, "stderr"+strconv.Itoa(call), message+"\n")
 }
 
-// sendPath is the test PATH: the stub first, then the plugin's binary and
-// git. With no stub, nothing named recado is reachable.
 func sendPath(t *testing.T, stub string) string {
 	t.Helper()
 	gitBinary, err := exec.LookPath("git")
@@ -110,7 +100,6 @@ func sendPath(t *testing.T, stub string) string {
 	return strings.Join(parts, string(os.PathListSeparator))
 }
 
-// stubCalls is how many send calls the stub received.
 func stubCalls(t *testing.T, stub string) int {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(stub, "count"))
@@ -127,7 +116,6 @@ func stubCalls(t *testing.T, stub string) int {
 	return calls
 }
 
-// stubArgv is the argv of one recorded send call.
 func stubArgv(t *testing.T, stub string, call int) []string {
 	t.Helper()
 	data, err := os.ReadFile(
@@ -138,7 +126,6 @@ func stubArgv(t *testing.T, stub string, call int) []string {
 	return strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
 }
 
-// stubAddr is RECADO_ADDR as one recorded send call saw it.
 func stubAddr(t *testing.T, stub string, call int) string {
 	t.Helper()
 	data, err := os.ReadFile(
@@ -156,13 +143,10 @@ func assertNoSend(t *testing.T, stub string) {
 	}
 }
 
-// reviewMessage is the notification an agent reads, with the branch quoted
-// for a shell.
 const reviewMessage = "revisa: review comments are waiting on branch " +
 	"'feat/x'. Run: revisa list --branch 'feat/x' --status open." +
 	" Answer each with revisa resolve, not recado reply."
 
-// wantArgv is the argv of one send call.
 func wantArgv(id string) []string {
 	return []string{
 		"send", id, reviewMessage, "--meta", "revisa_branch=feat/x",
@@ -181,7 +165,6 @@ func equalStrings(t *testing.T, what string, want, got []string) {
 	}
 }
 
-// send runs send.lua headless in dir with the stub on PATH.
 func sendCase(t *testing.T, dir, stub string, env ...string) {
 	t.Helper()
 	headless(t, dir, "send.lua", append([]string{
@@ -472,9 +455,6 @@ func TestBufferSendRefusesDetachedWorktree(t *testing.T) {
 	assertNoSend(t, stub)
 }
 
-// TestBufferSendRunsInTheExplicitWorktree pins the same rule for send: an
-// explicit worktree that is a directory runs the CLI there, so a send
-// from outside git still reads that worktree and messages its branch.
 func TestBufferSendRunsInTheExplicitWorktree(t *testing.T) {
 	_, linked := changesProject(t)
 	outside := t.TempDir()

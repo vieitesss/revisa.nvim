@@ -8,16 +8,13 @@ import (
 	"github.com/vieitesss/revisa.nvim/internal/git"
 )
 
-// worktreeList is a project's worktree list, on disk: a main worktree, a
-// linked one, one detached, and a bare entry. Returning real directories
-// lets a test look one up by a subdirectory or a symlink.
 type worktreeList struct {
 	list     []git.Worktree
 	main     string
 	linked   string
 	detached string
 	bare     string
-	link     string // A symlink to the linked worktree.
+	symlink  string
 }
 
 func newWorktreeList(t *testing.T) worktreeList {
@@ -28,7 +25,7 @@ func newWorktreeList(t *testing.T) worktreeList {
 		linked:   filepath.Join(root, "linked"),
 		detached: filepath.Join(root, "detached"),
 		bare:     filepath.Join(root, "repo.git"),
-		link:     filepath.Join(root, "link"),
+		symlink:  filepath.Join(root, "link"),
 	}
 	for _, dir := range []string{w.main, w.linked, w.detached, w.bare,
 		filepath.Join(w.main, "deep", "dir"),
@@ -37,7 +34,7 @@ func newWorktreeList(t *testing.T) worktreeList {
 			t.Fatal(err)
 		}
 	}
-	if err := os.Symlink(w.linked, w.link); err != nil {
+	if err := os.Symlink(w.linked, w.symlink); err != nil {
 		t.Fatal(err)
 	}
 	w.list = []git.Worktree{
@@ -54,12 +51,12 @@ func TestAt(t *testing.T) {
 	cases := []struct {
 		name string
 		dir  string
-		want string // Empty when no worktree holds dir.
+		want string
 	}{
 		{"root", w.main, w.main},
 		{"subdirectory", filepath.Join(w.main, "deep", "dir"), w.main},
-		{"symlinked root", w.link, w.linked},
-		{"symlinked subdirectory", filepath.Join(w.link, "deep"), w.linked},
+		{"symlinked root", w.symlink, w.linked},
+		{"symlinked subdirectory", filepath.Join(w.symlink, "deep"), w.linked},
 		{"detached", w.detached, w.detached},
 		{"bare", w.bare, ""},
 		{"outside", t.TempDir(), ""},
@@ -88,10 +85,10 @@ func TestNamed(t *testing.T) {
 		name   string
 		path   string
 		branch string
-		want   string // Empty when no worktree matches.
+		want   string
 	}{
 		{"path", w.main, "", w.main},
-		{"symlinked path", w.link, "", w.linked},
+		{"symlinked path", w.symlink, "", w.linked},
 		{"branch", "", "feat/x", w.linked},
 		{"path before branch", w.main, "feat/x", w.main},
 		{"detached by path", w.detached, "", w.detached},

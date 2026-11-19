@@ -4,7 +4,6 @@ vim.cmd("2Revisa comment")
 local editor, float = H.reserved(buf, win, 2)
 vim.api.nvim_buf_set_lines(editor, 0, -1, false, { "Retry this body" })
 
--- Unsaved edits made while the draft is open must also be refused.
 vim.api.nvim_buf_set_lines(buf, 0, 1, false, { "unsaved" })
 vim.cmd("write")
 H.error(messages, "save the buffer before commenting")

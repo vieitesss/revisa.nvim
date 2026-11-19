@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-// anchorProject is a normal clone whose feat/x worktree committed
-// src/a.lua with the given content.
 func anchorProject(t *testing.T, content string) (p project, linked string) {
 	t.Helper()
 	p = normalClone(t)
@@ -274,7 +272,6 @@ func TestListNeverMarksOldSideOrResolvedCommentsOutdated(t *testing.T) {
 	}
 }
 
-// storeFiles returns every stored comment's file name and content.
 func storeFiles(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
@@ -373,10 +370,6 @@ func TestNonGitListReanchorsAndMarksOutdated(t *testing.T) {
 	}
 }
 
-// TestListMarksABlankAnchorInAnEmptiedFileOutdated pins what "every line"
-// means for empty content: an emptied file has no lines, so a comment on
-// a blank line of it is gone. A file with content still splits on its
-// newlines, a trailing one included.
 func TestListMarksABlankAnchorInAnEmptiedFileOutdated(t *testing.T) {
 	t.Run("emptied file", func(t *testing.T) {
 		p, linked := anchorProject(t, "before\n\nafter\n")

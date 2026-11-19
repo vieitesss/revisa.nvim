@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// reviewEnv builds the environment of one testdata/nvim/review.lua case.
-// The origin file lives in the main worktree, so opening an entry has to
-// load a different buffer from the reviewed worktree.
 func reviewEnv(t *testing.T, p project, linked, kind string) []string {
 	t.Helper()
 	main := p.worktrees[0]
@@ -67,9 +64,6 @@ func TestBufferReviewPickerSelectsWorktree(t *testing.T) {
 	}
 }
 
-// TestBufferReviewRunsInTheExplicitWorktree pins the settled spec: an
-// explicit worktree argument that is a directory runs the CLI there, so a
-// review started outside git still lists that worktree.
 func TestBufferReviewRunsInTheExplicitWorktree(t *testing.T) {
 	p, linked := changesProject(t)
 	outside := t.TempDir()
@@ -77,10 +71,6 @@ func TestBufferReviewRunsInTheExplicitWorktree(t *testing.T) {
 		reviewEnv(t, p, linked, "outside")...)
 }
 
-// TestBufferReviewConsumesTheStartupWorktreeOnce covers the worktree the
-// shell command leaves in the environment: the first :Revisa review opens
-// it, the variable is cleared, and the next :Revisa review opens the
-// picker instead of reopening it. A nested Neovim cannot inherit it.
 func TestBufferReviewConsumesTheStartupWorktreeOnce(t *testing.T) {
 	p, linked := changesProject(t)
 	headless(t, p.worktrees[0], "review.lua",

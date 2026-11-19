@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// TestBufferEditRefusesUnsavedSource pins the documented save refusal: a
-// file-buffer edit made while the editor was open is not stored.
 func TestBufferEditRefusesUnsavedSource(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
@@ -88,9 +86,6 @@ func TestEditErrors(t *testing.T) {
 	}
 }
 
-// TestBufferEditComment drives :Revisa edit: the comment on the cursor
-// line opens prefilled and saves its new body; off any comment the picker
-// lists the file's comments; a buffer with no file target is refused.
 func TestBufferEditComment(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]

@@ -41,7 +41,6 @@ func realPath(t *testing.T, path string) string {
 	return resolved
 }
 
-// worktrees runs revisa worktrees --json in dir.
 func worktrees(t *testing.T, dir string) []worktreeJSON {
 	t.Helper()
 	out, stderr, code := run(t, dir, "worktrees", "--json")
@@ -55,7 +54,6 @@ func worktrees(t *testing.T, dir string) []worktreeJSON {
 	return got
 }
 
-// changes runs revisa changes --json in dir.
 func changes(t *testing.T, dir string, args ...string) changesJSON {
 	t.Helper()
 	out, stderr, code := run(t, dir,
@@ -70,9 +68,6 @@ func changes(t *testing.T, dir string, args ...string) changesJSON {
 	return got
 }
 
-// changesProject is a project whose feat/x worktree holds every kind of
-// session change: a commit, an uncommitted edit, a deletion, a rename
-// and an untracked file.
 func changesProject(t *testing.T) (p project, linked string) {
 	t.Helper()
 	root := t.TempDir()
@@ -423,8 +418,6 @@ func TestReviewStartsNeovim(t *testing.T) {
 					"REVISA_WORKTREE_RECORD=" + worktreeRecord}
 			}
 			args := []string{"review"}
-			// The worktree reaches the editor verbatim through the
-			// documented environment variable, not an Ex command.
 			wantWorktree := ""
 			if !c.pick {
 				args = append(args, linked)
@@ -446,9 +439,6 @@ func TestReviewStartsNeovim(t *testing.T) {
 	}
 }
 
-// TestReviewOpensTheWorktreeInNeovim covers the characters an Ex command
-// line would mangle: the worktree reaches Neovim verbatim, so the plugin's
-// CLI lists that worktree and the changes buffer names its branch.
 func TestReviewOpensTheWorktreeInNeovim(t *testing.T) {
 	nvim, err := exec.LookPath("nvim")
 	if err != nil {
@@ -501,8 +491,6 @@ exec "$REVISA_REAL_NVIM" --headless --clean \
 	}
 }
 
-// runEnv runs revisa with env added to a copy of the environment that
-// has no PATH, so a test controls the shell path completely.
 func runEnv(
 	t *testing.T, dir string, env []string, args ...string,
 ) (stdout, stderr string, code int) {

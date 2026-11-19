@@ -8,9 +8,6 @@ import (
 	"testing"
 )
 
-// TestInstallLinkAcceptsTheLinkAnotherInstanceMade covers two instances
-// installing at once: the other one links the path between the check for
-// it and the call that creates it.
 func TestInstallLinkAcceptsTheLinkAnotherInstanceMade(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "checkout", "bin", "revisa")

@@ -18,7 +18,6 @@ local function find(buf, text)
     error("no line " .. text .. " in " .. vim.inspect(lines(buf)))
 end
 
--- review opens the changes list and puts the cursor on the entry.
 local function review()
     require("revisa").review(vim.env.REVISA_TARGET)
     local buf = api.nvim_get_current_buf()
@@ -26,7 +25,6 @@ local function review()
     return buf
 end
 
--- sides returns the old and new windows of the open diff tab.
 local function sides()
     local old, new
     for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do
@@ -68,8 +66,6 @@ local function check_new(win)
     H.equal(true, vim.bo[buf].modifiable)
 end
 
--- check_diff asserts the whole diff tab: old left, new right, both in
--- diff mode, each side in the right buffer.
 local function check_diff()
     H.equal(2, #api.nvim_list_tabpages())
     local old, new = sides()
@@ -85,8 +81,6 @@ local function check_diff()
     return old, new
 end
 
--- check_old_comment asserts one old-side comment is drawn on line of
--- the old side, with body below it on screen, and never on the new side.
 local function check_old_comment(old, new, line, body)
     local oldbuf = api.nvim_win_get_buf(old)
     local newbuf = api.nvim_win_get_buf(new)
@@ -103,7 +97,6 @@ local function check_old_comment(old, new, line, body)
     H.equal(position.row + 1, drawn)
 end
 
--- comment writes body in the comment float of the current line.
 local function comment(body)
     vim.cmd("Revisa comment")
     local editor = H.float()
@@ -147,7 +140,6 @@ elseif case == "deleted-outdated" then
             }, H.virtual(buf))
             H.equal({ { "revisa: 1 outdated", "RevisaOutdated" } },
                 H.text(buf))
-            -- The block is rendered in the empty right window.
             vim.o.lines = 20
             vim.o.columns = 100
             local rows = H.screen()

@@ -1,5 +1,3 @@
--- Comments are drawn only on their file version, with wrapped visible
--- text. Private placement records and reason strings are not the contract.
 local api = vim.api
 local display = require("revisa.display")
 local buf = api.nvim_create_buf(false, true)
@@ -79,7 +77,6 @@ for _, case in ipairs(cases) do
     end
 end
 
--- Inspect the drawn text in a 20-cell window, not the wrapping helper.
 api.nvim_buf_set_lines(buf, 0, -1, false, { "one", "two", "three" })
 local win = api.nvim_open_win(buf, true, {
     relative = "editor", row = 0, col = 0, width = 20, height = 6,
@@ -99,7 +96,6 @@ for _, case in ipairs({
     H.display(buf, 2, 3, case[2])
 end
 
--- Prefixes count toward the width of replies and was: lines.
 display.draw(buf, newSide, { comment({
     status = "resolved",
     body = "first second third fourth fifth",

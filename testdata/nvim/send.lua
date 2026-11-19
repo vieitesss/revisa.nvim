@@ -8,8 +8,6 @@ for pick in (vim.env.REVISA_PICK or "1"):gmatch("[^,]+") do
     picks[#picks + 1] = pick
 end
 
--- vim.ui.select answers with the next REVISA_PICK entry, recording what
--- the picker offered.
 vim.ui.select = function(items, options, on_choice)
     offers[#offers + 1] = { items = items, prompt = options.prompt }
     local pick = picks[#offers]
@@ -34,8 +32,6 @@ local function send(argument)
     vim.cmd(command)
 end
 
--- check_offers asserts how many pickers opened, how many of them marked
--- one agent as the match, and which agents were never offered.
 local function check_offers(count, marked)
     if count ~= #offers then
         error("want " .. count .. " pickers, got " .. #offers .. ": "
@@ -61,8 +57,6 @@ local function check_offers(count, marked)
     end
 end
 
--- check_messages asserts the notification the test expects and that the
--- child's RECADO_ADDR stayed in the child.
 local function check_messages()
     local sent = vim.env.REVISA_SENT or ""
     if sent ~= "" then
@@ -78,7 +72,6 @@ local function check_messages()
     assert(vim.env.RECADO_ADDR ~= "revisa", "RECADO_ADDR leaked into Neovim")
 end
 
--- check_list opens the changes buffer of REVISA_TARGET.
 local function check_list()
     require("revisa").review(vim.env.REVISA_TARGET)
 end

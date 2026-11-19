@@ -1,5 +1,3 @@
--- Comments follow the file version the reviewer sees. A changes list or
--- a buffer with no file refuses a comment instead of guessing its path.
 local api = vim.api
 local messages = H.notifications()
 
@@ -15,7 +13,6 @@ save("Linked file")
 vim.cmd.edit(vim.fn.fnameescape(vim.env.REVISA_MAIN_FILE))
 save("Main file")
 
--- Missing files and another tool's virtual files report useful errors.
 vim.cmd.enew()
 api.nvim_buf_set_name(0, vim.env.REVISA_FILE .. ".missing")
 vim.cmd("Revisa comment")
@@ -25,7 +22,6 @@ api.nvim_buf_set_name(0, "tool://old-side/src/a.lua")
 vim.cmd("Revisa comment")
 H.error(messages, "revisa: cannot comment in a tool:// buffer")
 
--- A changes list is not a file. Its header must not open a diff either.
 require("revisa").review(vim.env.REVISA_TARGET)
 local list = api.nvim_get_current_buf()
 vim.cmd("Revisa comment")

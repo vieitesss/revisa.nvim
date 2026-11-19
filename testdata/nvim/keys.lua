@@ -2,7 +2,6 @@ local buf, win = H.open()
 local visual = vim.env.REVISA_MODE == "visual"
 local last = visual and 4 or 2
 
--- Cancel a nonempty draft with q, then save a whitespace-only draft.
 if not visual then
     vim.cmd("2Revisa comment")
     local editor = H.reserved(buf, win, 2)

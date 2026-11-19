@@ -87,7 +87,6 @@ func run(
 	return out.String(), errOut.String(), code
 }
 
-// fails runs revisa and checks its exit code and msg on stderr.
 func fails(t *testing.T, dir, msg string, want int, args ...string) {
 	t.Helper()
 	_, stderr, code := run(t, dir, args...)

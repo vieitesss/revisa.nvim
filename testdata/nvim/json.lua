@@ -1,5 +1,3 @@
--- Malformed CLI output reports one error per public command and leaves
--- the reviewer's file and existing comments intact.
 local api = vim.api
 local buf, win = H.open()
 H.display(buf, 2, 2, { "Keep existing" })

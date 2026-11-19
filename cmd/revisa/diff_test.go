@@ -8,20 +8,17 @@ import (
 	"testing"
 )
 
-// diffCase is one testdata/nvim/diff.lua case. path and oldPath are
-// relative to the reviewed worktree; the helper resolves the names.
 type diffCase struct {
 	name     string
-	entry    string // The changes buffer line the cursor moves to.
+	entry    string
 	path     string
 	oldPath  string
-	old      []string // Lines of the old side.
-	new      []string // Lines of the new side.
+	old      []string
+	new      []string
 	fileType string
 	deleted  bool
 }
 
-// env is the environment of one diff case for the reviewed worktree.
 func (c diffCase) env(t *testing.T, linked string) []string {
 	t.Helper()
 	base := git(t, linked, "merge-base", "main", "HEAD")
@@ -50,7 +47,6 @@ func boolEnv(value bool) string {
 	return ""
 }
 
-// jsonLines renders the buffer lines a case expects as a JSON array.
 func jsonLines(t *testing.T, lines []string) string {
 	t.Helper()
 	data, err := json.Marshal(lines)
@@ -60,14 +56,11 @@ func jsonLines(t *testing.T, lines []string) string {
 	return string(data)
 }
 
-// runDiff drives one testdata/nvim/diff.lua case from another worktree.
 func runDiff(t *testing.T, p project, linked string, c diffCase) {
 	t.Helper()
 	headless(t, p.worktrees[0], "diff.lua", c.env(t, linked)...)
 }
 
-// committedLines and editedLines are the two versions of src/a.lua in
-// the linked worktree of changesProject.
 var committedLines = []string{"local a = 1", "local b = 2", "local c = 3"}
 
 var editedLines = []string{"local a = 1", "local x = y", "if x then",
@@ -106,9 +99,6 @@ func TestBufferDiffDeletedFileHasEmptyNewSide(t *testing.T) {
 	})
 }
 
-// TestBufferDiffDeletedFileShowsOutdatedBlock covers #12 on a deleted
-// file: its empty new side has no lines, so its comments show in the end
-// block instead of on a guessed line.
 func TestBufferDiffDeletedFileShowsOutdatedBlock(t *testing.T) {
 	p, linked := changesProject(t)
 	writeFile(t, linked, "src/gone.go", "package gone\n")
@@ -127,9 +117,6 @@ func TestBufferDiffDeletedFileShowsOutdatedBlock(t *testing.T) {
 	})
 }
 
-// TestBufferDiffOldSideCommentDrawsOnOpen covers #9 at the headless
-// seam: an old-side comment stored before the diff opens is drawn on its
-// line of the old side, and not on the same line of the new side.
 func TestBufferDiffOldSideCommentDrawsOnOpen(t *testing.T) {
 	p, linked := changesProject(t)
 	base := git(t, linked, "merge-base", "main", "HEAD")
@@ -144,9 +131,6 @@ func TestBufferDiffOldSideCommentDrawsOnOpen(t *testing.T) {
 	})
 }
 
-// TestBufferDiffOldSideCommentOnDeletedLine covers #9: a comment on a
-// line only the old side has stores the old side, the old path and the
-// base commit, and is drawn there.
 func TestBufferDiffOldSideCommentOnDeletedLine(t *testing.T) {
 	p, linked := changesProject(t)
 	base := git(t, linked, "merge-base", "main", "HEAD")
@@ -174,9 +158,6 @@ func TestBufferDiffOldSideCommentOnDeletedLine(t *testing.T) {
 	}
 }
 
-// TestBufferDiffRenamedFileOldSideCommentStoresOldPath covers #9 for a
-// renamed file: the old side reads the old path, so a comment there
-// stores it.
 func TestBufferDiffRenamedFileOldSideCommentStoresOldPath(t *testing.T) {
 	p, linked := changesProject(t)
 	base := git(t, linked, "merge-base", "main", "HEAD")
@@ -203,7 +184,6 @@ func TestBufferDiffRenamedFileOldSideCommentStoresOldPath(t *testing.T) {
 	}
 }
 
-// repeatLines returns n buffer lines of the same text.
 func repeatLines(text string, n int) []string {
 	lines := make([]string, n)
 	for i := range lines {
@@ -212,8 +192,6 @@ func repeatLines(text string, n int) []string {
 	return lines
 }
 
-// movedBaseProject is a project whose feat/x worktree was rebased onto a
-// moved main, so its base is newer than the commit a comment may pin.
 func movedBaseProject(t *testing.T) (
 	p project, linked, commentCommit string,
 ) {
@@ -234,9 +212,6 @@ func movedBaseProject(t *testing.T) (
 	return project{worktrees: []string{main, linked}}, linked, commentCommit
 }
 
-// TestBufferDiffOldSideCommentWithMovedBaseIsNotDrawn covers #9: after a
-// rebase moves the base, the comment stays listed with its commit and is
-// not drawn inline, because the diff's old side is another commit.
 func TestBufferDiffOldSideCommentWithMovedBaseIsNotDrawn(t *testing.T) {
 	p, linked, commit := movedBaseProject(t)
 	addOK(t, linked, "--path", "src/a.lua", "--lines", "2",
@@ -316,8 +291,6 @@ func TestBufferDiffClosesTabOnQ(t *testing.T) {
 	})
 }
 
-// binaryProject commits a binary file, edits it in the linked worktree
-// and adds an untracked binary file there.
 func binaryProject(t *testing.T) (p project, linked string) {
 	t.Helper()
 	root := t.TempDir()

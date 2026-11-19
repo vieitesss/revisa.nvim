@@ -15,5 +15,4 @@ for _, block in ipairs(H.virtual(buf)) do
 end
 H.equal(true, widest <= room)
 
--- No cell of the body is lost: its last word pieces reach the screen.
 H.equal(true, H.row(H.screen(), "XY" .. string.rep("z", 5)) ~= nil)
