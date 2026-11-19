@@ -78,14 +78,19 @@ end
 
 -- check builds the CLI in the background when the checkout's commit is
 -- not the one last built. It does nothing when vim.g.revisa_auto_build is
--- false, or when the plugin is not its own git checkout.
+-- false, or when the plugin is not its own git checkout. It is building
+-- from the moment it starts, so a command run while the check is still
+-- looking reports that instead of a missing CLI.
 function M.check()
     if vim.g.revisa_auto_build == false then
         return
     end
-    pcall(vim.system, { "git", "rev-parse", "--show-toplevel", "HEAD" },
+    building = true
+    local ok = pcall(vim.system,
+        { "git", "rev-parse", "--show-toplevel", "HEAD" },
         { cwd = root, text = true }, function(result)
             if result.code ~= 0 then
+                building = false
                 return
             end
             local top, rev = unpack(vim.split(vim.trim(result.stdout), "\n"))
@@ -93,11 +98,15 @@ function M.check()
                 local real = vim.uv.fs_realpath(root)
                 if not rev or vim.uv.fs_realpath(top) ~= real
                     or built(rev) then
+                    building = false
                     return
                 end
                 build(rev)
             end)
         end)
+    if not ok then
+        building = false
+    end
 end
 
 -- building tells whether a build started by check is still running.

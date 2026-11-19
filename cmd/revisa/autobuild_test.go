@@ -19,6 +19,15 @@ printf '#!/bin/sh\necho "$@" >> "$REVISA_INSTALL_LOG"\n' > bin/revisa
 chmod +x bin/revisa
 `
 
+// delayedGitStub is a fake git on PATH. With REVISA_GIT_SLEEP set it
+// answers the plugin's startup check only after a delay, so a test can run
+// a command before the check returns; otherwise it runs the real git.
+const delayedGitStub = `#!/bin/sh
+if [ -z "$REVISA_GIT_SLEEP" ]; then exec "$REVISA_GIT" "$@"; fi
+sleep "$REVISA_GIT_SLEEP"
+printf '%s\n%s\n' "$REVISA_GIT_ROOT" "$REVISA_GIT_REV"
+`
+
 // buildPlugin is a copy of the plugin in its own git checkout, with a
 // fake go first on PATH.
 type buildPlugin struct {
@@ -34,8 +43,11 @@ func newBuildPlugin(t *testing.T) buildPlugin {
 	git(t, root, "commit", "-q", "-m", "plugin")
 	stubs := t.TempDir()
 	writeFile(t, stubs, "go", goStub)
-	if err := os.Chmod(filepath.Join(stubs, "go"), 0o755); err != nil {
-		t.Fatal(err)
+	writeFile(t, stubs, "git", delayedGitStub)
+	for _, name := range []string{"go", "git"} {
+		if err := os.Chmod(filepath.Join(stubs, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	gitBinary, err := exec.LookPath("git")
 	if err != nil {
@@ -53,6 +65,9 @@ func newBuildPlugin(t *testing.T) buildPlugin {
 		"REVISA_AUTO_BUILD=1",
 		"REVISA_GO_LOG=" + p.goLog,
 		"REVISA_INSTALL_LOG=" + p.installLog,
+		"REVISA_GIT=" + gitBinary,
+		"REVISA_GIT_ROOT=" + root,
+		"REVISA_GIT_REV=" + p.rev,
 		"PATH=" + strings.Join([]string{stubs, filepath.Dir(gitBinary),
 			"/usr/bin", "/bin"}, string(os.PathListSeparator)),
 	}
@@ -146,6 +161,12 @@ func TestAutoBuildReportsAFailedBuild(t *testing.T) {
 	if got := stampOf(t, p.root); got != "" {
 		t.Errorf("stamp %q written after a failed build", got)
 	}
+}
+
+func TestAutoBuildCommandRightAfterLoadReportsTheBuild(t *testing.T) {
+	p := newBuildPlugin(t)
+	headless(t, t.TempDir(), "build.lua",
+		append(p.env, "REVISA_CASE=immediate", "REVISA_GIT_SLEEP=1")...)
 }
 
 func TestAutoBuildCommandsWaitForTheBuild(t *testing.T) {

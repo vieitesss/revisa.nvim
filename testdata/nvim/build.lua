@@ -22,6 +22,10 @@ elseif case == "failed" then
     H.error(messages, "revisa: building the CLI failed: boom")
     H.error(messages, "vim.g.revisa_auto_build = false")
     H.equal(false, build.building())
+elseif case == "immediate" then
+    require("revisa.cli").run({ cwd = "." }, { "list" })
+    H.error(messages, "revisa: the CLI is still building")
+    assert(vim.wait(10000, finished), "the build did not finish")
 elseif case == "building" then
     assert(vim.wait(10000, build.building), "the build did not start")
     require("revisa.cli").run({ cwd = "." }, { "list" })
