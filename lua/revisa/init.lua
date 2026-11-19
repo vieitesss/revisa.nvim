@@ -7,8 +7,6 @@ local target = require("revisa.target")
 
 local show_resolved = false
 
--- refused reports and refuses when buf has edits the file on disk does not:
--- a comment is stored against the file. what names the action.
 local function refused(buf, what)
     if not vim.bo[buf].modified then
         return false
@@ -17,9 +15,6 @@ local function refused(buf, what)
     return true
 end
 
--- addArgs are the flags that name the file version a comment is made on.
--- The old side always names its branch and commit; a new side names its
--- branch when the target has one, and lets the CLI infer it otherwise.
 local function addArgs(found, lines)
     local args = { "--path", found.path, "--lines", lines }
     if found.side == "old" then
@@ -80,9 +75,6 @@ function M.comment(first, last)
     end)
 end
 
--- editable lists the comments of buf that are drawn, with the line the
--- editor opens below: the last line of an anchored one, the last line of
--- the file for one in the end block. The ones on line come first.
 local function editable(buf, found, comments, line)
     local count = api.nvim_buf_line_count(buf)
     local here, all = {}, {}
@@ -102,7 +94,6 @@ local function editable(buf, found, comments, line)
     return #here > 0 and here or all
 end
 
--- label names one comment in the picker: where it is, then its first line.
 local function label(item)
     local comment = item.comment
     local where = comment.condition

@@ -1,6 +1,5 @@
 local M = {}
 
--- line is one virtual line holding one chunk.
 local function line(text, group)
     return { { text, group } }
 end
@@ -41,8 +40,6 @@ function M.wrap(text, width)
     return out
 end
 
--- lines splits text into virtual lines of one highlight group, each
--- wrapped to width. prefix starts the first line.
 local function lines(text, group, width, prefix)
     local out = {}
     if type(text) ~= "string" then
@@ -58,7 +55,6 @@ local function lines(text, group, width, prefix)
     return out
 end
 
--- body_lines is the comment body, then its reply when it has one.
 local function body_lines(comment, width)
     local out = lines(comment.body, "RevisaComment", width)
     if type(comment.reply) == "string" then
@@ -68,7 +64,6 @@ local function body_lines(comment, width)
     return out
 end
 
--- was_lines is the anchor text, as a marker shows it instead of a line.
 local function was_lines(comment, width)
     local out = {}
     if type(comment.anchor_text) ~= "string" then

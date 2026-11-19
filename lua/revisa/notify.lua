@@ -7,12 +7,8 @@ local target = require("revisa.target")
 local settings = { notify = "none" }
 local allowed = { none = true, recado = true, rex = true }
 
--- pickPrompt is the question every notifier asks before typing a message
--- into a pane or an agent's inbox.
 local pickPrompt = "revisa: send the comments to"
 
--- matchSuffix marks the one candidate that works in the worktree under
--- review.
 local matchSuffix = "  (matches this worktree)"
 
 function M.setup(options)
@@ -28,21 +24,17 @@ function M.setup(options)
     settings.notify = notify
 end
 
--- quote wraps a branch name in single quotes for a shell.
-local function quote(text)
+local function shellQuote(text)
     return "'" .. text:gsub("'", "'\\''") .. "'"
 end
 
--- message points the agent at the open comments and says where to answer.
 local function message(branch)
-    local quoted = quote(branch)
+    local quoted = shellQuote(branch)
     return "revisa: review comments are waiting on branch " .. quoted
         .. ". Run: revisa list --branch " .. quoted .. " --status open."
         .. " Answer each with revisa resolve, not recado reply."
 end
 
--- root resolves dir to the real path of the worktree that holds it, nil
--- when dir is unknown or outside git.
 local function root(dir)
     local ok, result = pcall(function()
         return vim.system({
@@ -122,8 +114,6 @@ local function confirm(target, preview, onChoice)
     end)
 end
 
--- offer lists the targets, inspects the pick when the adapter can, then
--- delivers. A "retry" from the adapter lists the same targets again.
 local function offer(notifier, targets, branch)
     local text = message(branch)
     M.pick(targets, pickPrompt, function(chosen)
@@ -149,7 +139,6 @@ local function offer(notifier, targets, branch)
     end)
 end
 
--- M.send tells an agent or a pane that comments are waiting there.
 function M.send(request)
     local name = settings.notify
     if name == "none" then

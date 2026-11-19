@@ -12,9 +12,6 @@ local function label(branch)
     return branch
 end
 
--- explicitDir is the absolute path of a request that names an existing
--- directory, so the CLI can run there even when Neovim's working
--- directory is elsewhere. A branch name names no directory.
 local function explicitDir(request)
     if request == nil or request == "" then
         return nil
@@ -42,9 +39,6 @@ function M.cliDir(request)
     return vim.fn.getcwd(), request
 end
 
--- fetchChanges reads one worktree's session changes through the CLI.
--- request is a worktree path or branch, empty for the worktree of the
--- current directory.
 local function fetchChanges(request)
     local dir, named = M.cliDir(request)
     local args = { "changes", "--json" }
@@ -54,9 +48,6 @@ local function fetchChanges(request)
     return cli.json({ cwd = dir }, args)
 end
 
--- name is the buffer name of one changes list. A detached worktree has
--- no branch, so its head and worktree name it, and two detached
--- worktrees cannot delete each other's buffer.
 local function name(data)
     local branch = data.branch
     if branch == nil or branch == "" then
@@ -66,7 +57,6 @@ local function name(data)
     return "revisa://changes/" .. branch
 end
 
--- build returns the buffer lines and the entry of each of those lines.
 local function build(data)
     local lines = {
         "worktree " .. data.worktree,
@@ -75,23 +65,20 @@ local function build(data)
             " (" .. data.default_branch .. ")",
         "",
     }
-    local entries = {}
+    local entries_by_line = {}
     for _, entry in ipairs(data.entries) do
         local text = entry.status .. " " .. entry.path
         if entry.status == "R" then
             text = "R " .. entry.old_path .. " -> " .. entry.path
         end
         lines[#lines + 1] = text
-        entries[#lines] = entry
+        entries_by_line[#lines] = entry
     end
-    return lines, entries
+    return lines, entries_by_line
 end
 
--- draw replaces the buffer contents, keeping the cursor on its line.
--- The session keys its entries by buffer line, so a header line has no
--- entry and nothing may iterate the table as a list.
 local function draw(buf, data)
-    local lines, entries = build(data)
+    local lines, entries_by_line = build(data)
     local cursor = api.nvim_win_get_cursor(0)[1]
     vim.bo[buf].modifiable = true
     api.nvim_buf_set_lines(buf, 0, -1, false, lines)
@@ -102,7 +89,7 @@ local function draw(buf, data)
         head = data.head,
         base = data.base,
         default_branch = data.default_branch,
-        entries = entries,
+        entries_by_line = entries_by_line,
     }
     api.nvim_win_set_cursor(0, { math.min(cursor, #lines), 0 })
 end
@@ -114,7 +101,8 @@ function M.entry(buf, line)
     if type(session) ~= "table" then
         return nil
     end
-    local change = session.entries[line or api.nvim_win_get_cursor(0)[1]]
+    local change =
+        session.entries_by_line[line or api.nvim_win_get_cursor(0)[1]]
     if type(change) ~= "table" then
         return nil
     end
@@ -213,7 +201,6 @@ function M.open(request)
         { buffer = buf, desc = "revisa: close the changes" })
 end
 
--- M.pick offers every worktree and opens the review of the one picked.
 function M.pick()
     local dir = M.cliDir()
     local worktrees = cli.json({ cwd = dir }, { "worktrees", "--json" })

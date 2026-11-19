@@ -8,12 +8,8 @@ local M = {}
 local uv = vim.uv
 local buffer = require("revisa.buffer")
 
--- require_file is the one reason every buffer kind that shows no file
--- reports, so a reviewer learns the same rule everywhere.
 local require_file = "revisa: comments require a real file buffer"
 
--- real resolves every symlink in path, so two spellings of one worktree
--- compare equal.
 local function real(path)
     if type(path) ~= "string" or path == "" then
         return path
@@ -21,8 +17,6 @@ local function real(path)
     return uv.fs_realpath(path) or path
 end
 
--- fromSession is the target of a changes buffer, built from the session
--- the buffer stores.
 local function fromSession(session)
     local worktree = real(session.worktree)
     return {
@@ -33,13 +27,10 @@ local function fromSession(session)
         head = session.head,
         base = session.base,
         default_branch = session.default_branch,
-        entries = session.entries,
+        entries_by_line = session.entries_by_line,
     }
 end
 
--- fromPin is the target diff.open pinned on one of its buffers. The pin
--- is only good while the buffer still has the name it was read for, so a
--- renamed buffer falls through to the file on disk.
 local function fromPin(pin)
     local worktree = real(pin.worktree)
     return {
