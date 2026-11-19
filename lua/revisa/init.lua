@@ -7,6 +7,16 @@ local target = require("revisa.target")
 
 local show_resolved = false
 
+-- refused reports and refuses when buf has edits the file on disk does not:
+-- a comment is stored against the file. what names the action.
+local function refused(buf, what)
+    if not vim.bo[buf].modified then
+        return false
+    end
+    cli.error("save the buffer before " .. what)
+    return true
+end
+
 -- addArgs are the flags that name the file version a comment is made on.
 -- The old side always names its branch and commit; a new side names its
 -- branch when the target has one, and lets the CLI infer it otherwise.
@@ -51,13 +61,11 @@ function M.comment(first, last)
         cli.error(err)
         return
     end
-    if vim.bo[buf].modified then
-        cli.error("save the buffer before commenting")
+    if refused(buf, "commenting") then
         return
     end
     require("revisa.float").open(buf, last, function(body)
-        if vim.bo[buf].modified then
-            cli.error("save the buffer before commenting")
+        if refused(buf, "commenting") then
             return false
         end
         local args = { "add" }
@@ -127,6 +135,9 @@ function M.edit()
             return
         end
         require("revisa.float").open(buf, item.last, function(body)
+            if refused(buf, "editing") then
+                return false
+            end
             local result = cli.run({ cwd = found.cwd },
                 { "edit", item.comment.id, "--body", body })
             if result == nil then
