@@ -250,9 +250,10 @@ type LocatedComment struct {
 	Anchor anchor.Result
 }
 
-// List locates comments on branch, optionally filtered by status. An empty
-// branch defaults to the current branch in git; outside git it is ignored.
-func (p Project) List(branch, status string) ([]LocatedComment, error) {
+// List locates comments on branch, optionally filtered by status and by
+// one file path. An empty branch defaults to the current branch in git;
+// outside git it is ignored. An empty path lists every file.
+func (p Project) List(branch, status, path string) ([]LocatedComment, error) {
 	branch, err := p.CommentBranch("list", branch)
 	if err != nil {
 		return nil, err
@@ -271,6 +272,9 @@ func (p Project) List(branch, status string) ([]LocatedComment, error) {
 			continue
 		}
 		if status != "" && c.Status != status {
+			continue
+		}
+		if path != "" && c.Path != path {
 			continue
 		}
 		located, err := anchor.Locate(c, src)

@@ -19,7 +19,8 @@ import (
 const usage = `usage: revisa <command> [flags]
 
 commands:
-  list (ls) print the current branch's comments (--branch, --status)
+  list (ls) print the current branch's comments (--branch, --status,
+            --file)
   add       comment on lines of a file
   edit      replace a comment's body (--body)
   resolve   resolve a comment with a reply
@@ -138,6 +139,8 @@ func list(args []string, stdout, stderr io.Writer) error {
 		"only comments on this branch (default: the current branch)")
 	status := fl.String("status", "",
 		"only comments with this status: open or resolved")
+	file := fl.String("file", "",
+		"only comments on this file, absolute or from the root")
 	asJSON := fl.Bool("json", false, "print every field as JSON")
 	positional, err := parse(fl, args)
 	if err != nil {
@@ -161,10 +164,17 @@ func list(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 	}
+	path := ""
+	if *file != "" {
+		path, err = p.Relative(*file)
+		if err != nil {
+			return fmt.Errorf("list: %w", err)
+		}
+	}
 	if err := warnLocalComments(p, stderr); err != nil {
 		return err
 	}
-	comments, err := p.List(*branch, *status)
+	comments, err := p.List(*branch, *status, path)
 	if err != nil {
 		return err
 	}

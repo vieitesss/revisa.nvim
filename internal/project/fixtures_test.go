@@ -107,7 +107,7 @@ func add(t *testing.T, p project.Project, path string, start int, body string,
 func list(t *testing.T, p project.Project, branch, status string,
 ) []project.LocatedComment {
 	t.Helper()
-	got, err := p.List(branch, status)
+	got, err := p.List(branch, status, "")
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

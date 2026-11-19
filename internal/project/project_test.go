@@ -588,10 +588,29 @@ func TestListDefaultsToCurrentBranch(t *testing.T) {
 	}
 }
 
+func TestListFiltersToOneFilePath(t *testing.T) {
+	_, linked := clone(t)
+	commitFile(t, linked, "src/a.lua", "alpha\nbeta\n")
+	commitFile(t, linked, "src/b.lua", "gamma\n")
+	p := find(t, linked)
+	add(t, p, "src/a.lua", 1, "on a")
+	add(t, p, "src/b.lua", 1, "on b")
+	got, err := p.List("feat/x", "", "src/b.lua")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != 1 || got[0].Body != "on b" {
+		t.Fatalf("want one comment on src/b.lua, got %+v", got)
+	}
+	if all := list(t, p, "feat/x", ""); len(all) != 2 {
+		t.Errorf("no path lists %d comments, want 2", len(all))
+	}
+}
+
 func TestListOnDetachedHeadNeedsBranch(t *testing.T) {
 	_, linked := clone(t)
 	gitAt(t, linked, "checkout", "-q", "--detach")
-	_, err := find(t, linked).List("", "")
+	_, err := find(t, linked).List("", "", "")
 	if err == nil || !strings.Contains(err.Error(),
 		"HEAD is detached, pass --branch") {
 		t.Errorf("error %v", err)

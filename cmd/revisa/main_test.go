@@ -205,3 +205,20 @@ func TestStoreIsUntrackedAndSurvivesClean(t *testing.T) {
 		t.Errorf("want 3 comments after git clean, got %d", n)
 	}
 }
+
+func TestListReturnsOnlyOneFilesComments(t *testing.T) {
+	p := normalClone(t)
+	addMocks(t, p.worktrees[0])
+	linked := p.worktrees[1]
+	got := listJSON(t, linked, "--file", filepath.Join(linked, "src/a.lua"))
+	if len(got) != 1 {
+		t.Fatalf("want 1 comment on src/a.lua, got %v", got)
+	}
+	if got[0]["path"] != "src/a.lua" {
+		t.Errorf("path: got %#v, want src/a.lua", got[0]["path"])
+	}
+	none := listJSON(t, linked, "--file", filepath.Join(linked, "src/zz.lua"))
+	if len(none) != 0 {
+		t.Errorf("want no comments, got %v", none)
+	}
+}
