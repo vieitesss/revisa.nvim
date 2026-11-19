@@ -3,14 +3,7 @@ vim.cmd("Revisa refresh")
 
 -- Two lines were inserted above the comment, so its sign moved with its
 -- anchor text and no marker stands in for it.
-H.equal({ { line = 3, text = ">", group = "RevisaSign" } }, H.signs(buf))
-H.equal({
-    {
-        row = 3,
-        above = true,
-        lines = { { { "Kept", "RevisaComment" } } },
-    },
-}, H.virtual(buf))
+H.display(buf, 3, 3, { "Kept" })
 H.equal(nil, H.text(buf))
 
 -- Nothing is rendered in the end block, and the summary is not there.

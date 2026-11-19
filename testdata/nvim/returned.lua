@@ -24,14 +24,7 @@ vim.cmd.write()
 vim.cmd("Revisa refresh")
 
 -- The comment is back on its line and the block is gone.
-H.equal({ { line = 5, text = ">", group = "RevisaSign" } }, H.signs(buf))
-H.equal({
-    {
-        row = 5,
-        above = true,
-        lines = { { { "This text is gone", "RevisaComment" } } },
-    },
-}, H.virtual(buf))
+H.display(buf, 5, 5, { "This text is gone" })
 H.equal(nil, H.text(buf))
 
 -- The rendered screen agrees: no block and no summary any more.
