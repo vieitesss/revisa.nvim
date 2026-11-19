@@ -4,156 +4,91 @@ Review what agents changed across a project's worktrees, leave comments on
 lines, and have agents act on them. The repository contains a Neovim plugin,
 a standalone Go CLI, and an agent skill.
 
-## Install with lazy.nvim
+## Requirements
 
-Go must be installed and available on `PATH`. Add this plugin spec:
+- Neovim 0.12 or newer.
+- Go 1.27 or newer on `PATH`, to build the CLI.
+
+## Install
+
+Both plugin managers below build the CLI into the checkout's `bin/revisa`,
+then run `revisa install`. It links the CLI to `~/.local/bin/revisa` and the
+agent skill to `~/.agents/skills/revisa`. Keep `~/.local/bin` on `PATH`.
+See `:help revisa-install` for details.
+
+### vim.pack
+
+Define the build hook before `vim.pack.add()`, so it also runs on the first
+install:
+
+```lua
+vim.api.nvim_create_autocmd("PackChanged", {
+    callback = function(ev)
+        local kind = ev.data.kind
+        if ev.data.spec.name ~= "revisa.nvim"
+            or (kind ~= "install" and kind ~= "update") then
+            return
+        end
+        local build = "go build -o bin/revisa ./cmd/revisa"
+            .. " && bin/revisa install"
+        local result = vim.system({ "sh", "-c", build },
+            { cwd = ev.data.path, text = true }):wait()
+        if result.code ~= 0 then
+            vim.notify("revisa.nvim: build failed\n" .. result.stderr,
+                vim.log.levels.ERROR)
+        end
+    end,
+})
+
+vim.pack.add({
+    {
+        src = "https://github.com/vieitesss/revisa.nvim",
+        version = vim.version.range("*"),
+    },
+})
+```
+
+### lazy.nvim
 
 ```lua
 {
     "vieitesss/revisa.nvim",
+    version = "*",
     build = "go build -o bin/revisa ./cmd/revisa && bin/revisa install",
 }
 ```
 
-The build step compiles the CLI into the checkout's `bin/revisa`, then runs
-`revisa install`. You can run the same command manually from the checkout:
+`version` follows the latest release instead of `main` in both managers.
 
-```sh
-go build -o bin/revisa ./cmd/revisa && bin/revisa install
-```
+## Quick start
 
-## What `revisa install` does
+1. Review a worktree: run `revisa review` in a shell, or `:Revisa review`
+   in Neovim. Pick a worktree to list its changes, then press `<CR>` on a
+   file to open it as a diff against its base.
+2. Comment: `:Revisa comment` on a line, or `:'<,'>Revisa comment` on a
+   selection. Write the body and save it with `:w`.
+3. Tell the agent: `:Revisa send` points an agent at the waiting comments.
+   It works through Recado or Rex, set with
+   `require("revisa").setup({ notify = "recado" })` or `"rex"`.
+4. The agent reads the comments with `revisa list` and answers each one
+   with `revisa resolve`, following the installed skill. `:Revisa resolved`
+   shows its replies.
 
-It creates two symlinks, making parent directories when needed:
-
-- `~/.local/bin/revisa` points to the built `<checkout>/bin/revisa` binary.
-- `~/.agents/skills/revisa` points to `<checkout>/skills/revisa`.
-
-The checkout is found from the running binary's real path, even when you
-run it through the installed link. Its `skills/revisa/SKILL.md` must exist.
-Keep the checkout in place: the installed links depend on it.
-
-To choose a different directory for the CLI link:
-
-```sh
-bin/revisa install --bin-dir "$HOME/bin"
-```
-
-`--bin-dir` only changes the CLI link. The skill always goes into
-`~/.agents/skills`.
-
-If the CLI directory is not on `PATH`, install prints a warning to stderr
-but still succeeds. Add the directory to your shell configuration before
-using `revisa` from a new shell. For the default directory:
-
-```sh
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-Install prints one stdout line for each new or already-present link.
-Running it twice is safe: matching links stay unchanged. It never replaces
-an unrelated file, directory, or symlink. A failure names the path involved
-and exits with code `1`; invalid arguments exit with code `2`.
-
-## Review a worktree
-
-From a shell in the project, `revisa review` opens Neovim in the worktree
-picker, and `revisa review <worktree>` opens one worktree directly. A
-worktree is a path or a branch. The working directory is kept, and
-`$REVISA_NVIM` chooses another Neovim executable.
-
-Inside Neovim, `:Revisa review [WORKTREE]` does the same. Without a
-worktree it uses `vim.ui.select` over the project's worktrees, so no
-picker plugin is needed. When the worktree is a directory the CLI runs
-there, so the review also works with Neovim's working directory outside
-the project; a branch name runs it in the worktree of the current
-buffer's review target.
-
-The list shows that worktree's commits since the merge-base with the
-project's default branch, plus uncommitted changes and untracked files.
-On the default branch it shows only the uncommitted work, because
-sessions do not commit there.
-
-| Key    | Action                                                 |
-| ------ | ------------------------------------------------------ |
-| `<CR>` | Open the change as a diff: base left, file right        |
-| `o`    | Open the file alone, in the previous window             |
-| `R`    | Reload the list from the CLI                            |
-| `q`    | Close the list                                          |
-
-Comments on the opened file appear as usual.
-
-The diff view opens in a new tab, with the content at the base on the
-left and the real file on the right, both in Neovim's diff mode. The
-right side stays editable, so comments work there like on any file, and
-the left side comments on the old side at the base commit, where its
-stored comments are drawn as it opens. A line only the base has, such as
-a deleted one, takes a comment there. A renamed entry reads its old path
-on the left, so the comment stores that path; an added or untracked one
-has an empty left side, and a deleted one has an empty right side. A
-comment pinned to an older base, as after a rebase, is not drawn inline
-but still listed. Commenting in another tool's `scheme://` buffer is
-refused with a message naming the scheme. Revisa
-computes no diff: git provides the base content and Neovim renders the
-comparison. `q` on the left side closes the tab. A file with a NUL byte
-in its first 8000 bytes is reported as binary instead of opened.
-
-`:Revisa edit` changes a comment's body: the comment on the cursor line,
-or one picked from the file's drawn comments when the cursor is on none.
-It opens the comment editor holding the current body, and `:w` saves it
-through `revisa edit <id> --body <text>`. Comment bodies wrap to the
-window, between 20 and 80 columns, since virtual lines ignore `'wrap'`.
-
-A comment with no current lines is never drawn on a guessed line. Outdated
-comments, and unknown ones whose branch is gone, appear in one block below
-the last line, headed `outdated (N)` or `unknown (N)`, each with its body
-and the `was:` lines it was made on. A right-aligned line-1 summary shows
-the counts. The block is redrawn by `:Revisa refresh` and disappears when
-the anchor text is back, and the empty right side of a deleted file shows
-it too. See `:help revisa-display`.
-
-The CLI exposes the same data for scripts and agents:
-
-```sh
-revisa worktrees [--json]
-revisa changes [--worktree PATH|BRANCH] [--json]
-```
-
-`changes` prints a header line, `worktree <path> <branch> base <sha>
-(<default branch>)`, then one `STATUS path` line per entry, with
-`old -> new` after a rename. Status is `M`, `A`, `D`, `R` or `?` for an
-untracked file.
-
-## Tell the agent that comments are waiting
-
-Agents can always pull comments with `revisa list`, so notification is
-optional. Two notifiers can carry the pointer, chosen once:
+There are no default keymaps. For example:
 
 ```lua
-require("revisa").setup({ notify = "recado" })
--- or
-require("revisa").setup({ notify = "rex" })
+vim.keymap.set("n", "<leader>rc", "<Plug>(revisa-comment)")
+vim.keymap.set("x", "<leader>rc", "<Plug>(revisa-comment)")
+vim.keymap.set("n", "<leader>rr", "<cmd>Revisa review<cr>")
 ```
 
-With Recado, `recado` must be on `PATH`, and `:Revisa send [WORKTREE]`
-then asks you which live agent to message and sends it after you confirm.
-Without a worktree it uses the changes buffer's, the diff view's, or the
-current file's. A worktree that is a directory is where the CLI runs, so
-the send also works from outside the project. Remote agents and Codex
-are not offered, since they cannot receive these messages. The one agent
-working in that worktree is offered first, marked as the match; anything
-else, or several matches, leaves the choice to you.
+## Documentation
 
-With Rex, `REX_SESSION` must be set and `rex` on `PATH`, and
-`:Revisa send [WORKTREE]` asks you which pane to type into. The pane your
-Neovim runs in is not offered. Before the confirm, the pane is captured
-with `rex capture` and its last 10 lines are shown, because `rex send`
-types into whatever runs there: if the agent has exited, the text goes to
-the shell. The pick is always explicit.
+- `:help revisa` for the plugin: commands, diff view, display and setup.
+- [`skills/revisa/SKILL.md`](skills/revisa/SKILL.md) for the CLI as agents
+  use it.
+- [`GLOSSARY.md`](GLOSSARY.md) for the terms revisa uses.
 
-The message carries no comment content, only where to read it: run
-`revisa list --branch '<branch>' --status open` and answer each comment
-with `revisa resolve`, not `recado reply`. Revisa reads no recado inbox
-and registers no agent. A successful send prints `revisa: sent to <id>`
-and returns; a failure prints the notifier's error; Recado's exit code
-`2` reopens the picker. The `notify` setting is `"none"` by default.
+## License
+
+[MIT](LICENSE)

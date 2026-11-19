@@ -1,9 +1,11 @@
 *revisa.txt*  Comments on real file buffers
+                                                                      *revisa*
 
 ==============================================================================
 CONTENTS                                                    *revisa-contents*
 
     Requirements        |revisa-requirements|
+    Install             |revisa-install|
     Commands            |revisa-commands|
     Comment editor      |revisa-editor|
     Mappings            |revisa-mappings|
@@ -15,7 +17,8 @@ CONTENTS                                                    *revisa-contents*
 ==============================================================================
 REQUIREMENTS                                               *revisa-requirements*
 
-Neovim 0.10 or newer. No other plugins are required.
+Neovim 0.12 or newer. No other plugins are required. Building the CLI needs
+Go 1.27 or newer.
 
 The plugin uses the revisa CLI. It looks for an executable named revisa on PATH,
 then for bin/revisa inside the plugin directory. If neither exists, an error
@@ -25,6 +28,40 @@ names both locations. The CLI is the only code that reads or writes comments.
 Otherwise it reports that and sends nothing.
 
 The worktree picker uses |vim.ui.select|. It needs no picker plugin.
+
+==============================================================================
+INSTALL                                                        *revisa-install*
+
+The README shows plugin manager specs. Each builds the CLI and links it: >
+
+    go build -o bin/revisa ./cmd/revisa && bin/revisa install
+<
+Run the same command from the checkout to install by hand.
+
+revisa install creates two symlinks, making parent directories when needed:
+
+    ~/.local/bin/revisa         the built <checkout>/bin/revisa
+    ~/.agents/skills/revisa     <checkout>/skills/revisa
+
+The checkout is found from the running binary's real path, even when it runs
+through the installed link. Its skills/revisa/SKILL.md must exist. Keep the
+checkout in place: the installed links depend on it.
+
+--bin-dir DIR puts the CLI link in DIR instead: >
+
+    bin/revisa install --bin-dir "$HOME/bin"
+<
+It only moves the CLI link. The skill always goes into ~/.agents/skills.
+
+If the CLI directory is not on PATH, install warns on stderr but still
+succeeds. Add it to your shell configuration, for the default directory: >
+
+    export PATH="$HOME/.local/bin:$PATH"
+<
+Install prints one stdout line for each new or already-present link. Running
+it twice is safe: matching links stay unchanged. It never replaces an
+unrelated file, directory or symlink. A failure names the path involved and
+exits with code 1; invalid arguments exit with code 2.
 
 ==============================================================================
 COMMANDS                                                      *revisa-commands*
