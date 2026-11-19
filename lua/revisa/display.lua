@@ -30,6 +30,13 @@ local function place(comment, where, moved)
     return placed
 end
 
+-- waiting reports whether win keeps its sign column hidden until a sign
+-- shows, which 'signcolumn' auto and auto:N do.
+local function waiting(win)
+    local column = api.nvim_get_option_value("signcolumn", { win = win })
+    return column == "auto" or column:sub(1, 5) == "auto:"
+end
+
 -- buffers lists the loaded buffers this feature has drawn comments into.
 function M.buffers()
     local bufs = {}
@@ -50,10 +57,10 @@ local groups = {
     { condition = "unknown", group = "RevisaUnknown" },
 }
 
--- anchored draws a comment on its lines: a sign on each, the body below.
--- It returns the extmarks of the first and last signs, so a later redraw
--- can read the lines they moved to.
-local function anchored(buf, placed)
+-- signs marks the lines of an anchored comment. It returns the extmarks
+-- of the first and last signs, so a later redraw can read the lines they
+-- moved to.
+local function signs(buf, placed)
     local first, last
     for line = placed.line_start, placed.line_end do
         last = api.nvim_buf_set_extmark(buf, namespace, line - 1, 0, {
@@ -62,13 +69,17 @@ local function anchored(buf, placed)
         })
         first = first or last
     end
-    -- Leave room for padding below the anchor, even on empty lines.
+    return first, last
+end
+
+-- body draws a comment below the last of its lines. Leaving room for
+-- padding below the anchor works even on empty lines.
+local function body(buf, placed)
     api.nvim_buf_set_extmark(buf, namespace, placed.line_end, 0, {
         virt_lines = placed.body,
         virt_lines_above = true,
         right_gravity = false,
     })
-    return first, last
 end
 
 -- block groups the markers by condition into one block of virtual lines.
@@ -132,23 +143,49 @@ function M.draw(buf, target, comments, show_resolved, moved)
         target = target, count = count, show_resolved = show_resolved,
         cells = width(buf),
     }
+    -- The signs come first: they widen the gutter when 'signcolumn' is
+    -- auto, so the cells a body may take are measured once they are there.
+    local placed = {}
     local anchors = {}
-    local markers = {}
     for _, comment in ipairs(comments) do
-        local placed = place(comment, where, moved)
-        if placed.kind == "anchored" then
-            local first, last = anchored(buf, placed)
+        local one = place(comment, where, moved)
+        placed[#placed + 1] = one
+        if one.kind == "anchored" then
+            local first, last = signs(buf, one)
             anchors[#anchors + 1] = {
                 comment = comment, first = first, last = last,
             }
-        elseif placed.kind == "marker" then
-            markers[#markers + 1] = placed
         end
     end
     drawn[buf] = {
         target = target, comments = comments, show_resolved = show_resolved,
         anchors = anchors,
     }
+    -- A sign column that 'signcolumn' keeps hidden until a sign shows is
+    -- laid out on the next redraw, so the bodies are wrapped after it.
+    for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+        if waiting(win) then
+            vim.cmd.redraw()
+            break
+        end
+    end
+    local room = width(buf)
+    if room ~= where.cells then
+        where.cells = room
+        for index, one in ipairs(placed) do
+            if one.kind ~= "hidden" then
+                placed[index] = place(comments[index], where, moved)
+            end
+        end
+    end
+    local markers = {}
+    for _, one in ipairs(placed) do
+        if one.kind == "anchored" then
+            body(buf, one)
+        elseif one.kind == "marker" then
+            markers[#markers + 1] = one
+        end
+    end
     local lines, counts = block(markers)
     if #lines == 0 then
         return
