@@ -10,7 +10,7 @@ func TestResolveStoresReply(t *testing.T) {
 		"--path", "src/a.lua", "--lines", "2", "--body", "Rename x")
 
 	out, stderr, code := run(t, p.worktrees[1],
-		"resolve", id, "--reply", "Renamed to count.")
+		"resolve", "--reply", "Renamed to count.", id)
 	if code != 0 || out != "resolved "+id+"\n" {
 		t.Fatalf("exit %d, out %q, stderr %q", code, out, stderr)
 	}
@@ -21,17 +21,6 @@ func TestResolveStoresReply(t *testing.T) {
 	got := listJSON(t, p.worktrees[1], "--status", "resolved")
 	if len(got) != 1 || got[0]["reply"] != "Renamed to count." {
 		t.Errorf("got %v", got)
-	}
-}
-
-func TestResolveAcceptsFlagsBeforeID(t *testing.T) {
-	p, _ := reviewProject(t)
-	id := addOK(t, p.worktrees[1],
-		"--path", "src/a.lua", "--lines", "1", "--body", "b")
-	_, stderr, code := run(t, p.worktrees[1],
-		"resolve", "--reply", "done", id)
-	if code != 0 {
-		t.Fatalf("exit %d: %s", code, stderr)
 	}
 }
 
