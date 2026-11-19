@@ -25,6 +25,16 @@ type Project struct {
 // ErrNeedsGit reports a feature unavailable outside git.
 var ErrNeedsGit = errors.New("needs a git repository")
 
+// OutsideError reports an absolute path outside the project.
+type OutsideError struct {
+	Path string
+	Root string
+}
+
+func (e OutsideError) Error() string {
+	return fmt.Sprintf("%s is outside the project %s", e.Path, e.Root)
+}
+
 // Find locates the project containing wd without creating its store.
 func Find(wd string) (Project, error) {
 	root, err := filepath.Abs(wd)
@@ -73,6 +83,43 @@ func (p Project) Dir() string {
 		return p.Root
 	}
 	return filepath.Dir(p.Store)
+}
+
+// Relative maps path to the one the store keeps, relative to the project
+// root, with slash separators. A relative path is taken as already
+// relative; an absolute one must be inside the root. The file need not
+// exist, so an old-side path survives a rename.
+func (p Project) Relative(path string) (string, error) {
+	if !filepath.IsAbs(path) {
+		return filepath.ToSlash(filepath.Clean(path)), nil
+	}
+	root := p.Dir()
+	rel, err := filepath.Rel(resolved(root), resolved(path))
+	if err != nil {
+		return "", err
+	}
+	if !filepath.IsLocal(rel) {
+		return "", OutsideError{Path: path, Root: root}
+	}
+	return filepath.ToSlash(rel), nil
+}
+
+// resolved returns path with its symlinks resolved: git reports the real
+// path, which differs from the one a caller may hold, as on macOS where
+// /var is a link. Parts below the deepest path that exists are kept, so a
+// path already renamed away resolves too.
+func resolved(path string) string {
+	rest := ""
+	for current := path; ; current = filepath.Dir(current) {
+		real, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			return filepath.Join(real, rest)
+		}
+		if filepath.Dir(current) == current {
+			return path
+		}
+		rest = filepath.Join(filepath.Base(current), rest)
+	}
 }
 
 // Branch returns the current branch, or "" on a detached HEAD.
