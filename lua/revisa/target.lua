@@ -61,7 +61,7 @@ function M.of(buf)
     return {
         kind = "file",
         cwd = real(context.cwd),
-        absolute = real(context.path),
+        absolute = context.path,
         side = "new",
     }
 end

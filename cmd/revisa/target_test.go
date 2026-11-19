@@ -1,6 +1,7 @@
 package main_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -44,6 +45,27 @@ func TestBufferCommentsUseTheDisplayedFileVersion(t *testing.T) {
 						c.dir, i, field, got[i][field], value)
 				}
 			}
+		}
+	}
+}
+
+func TestBufferKeepsASymlinkedFilesPath(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "real.txt", "first\nsecond\n")
+	alias := filepath.Join(root, "alias.txt")
+	if err := os.Symlink("real.txt", alias); err != nil {
+		t.Fatal(err)
+	}
+	addOK(t, root, "--path", "alias.txt", "--lines", "1",
+		"--body", "Existing alias comment")
+	headless(t, root, "symlink.lua", "REVISA_FILE="+alias)
+	got := listJSON(t, root, "--file", alias)
+	if len(got) != 2 {
+		t.Fatalf("want 2 comments on alias.txt, got %v", got)
+	}
+	for _, c := range got {
+		if c["path"] != "alias.txt" {
+			t.Errorf("path: got %#v, want alias.txt", c["path"])
 		}
 	}
 }

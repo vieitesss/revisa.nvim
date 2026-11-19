@@ -30,9 +30,17 @@ A plain file buffer's target has no worktree: the CLI runs in the editor's
 working directory when that contains the file, else in the file's directory,
 and finds the worktree from there. `:Revisa send` therefore runs
 `changes --json` with no `--worktree` for such a buffer. A file whose lines
-moved or were deleted is unaffected: the mapping is lexical, so an old-side
-path that no longer exists still maps, and `--side old` reads its content
-from `--commit`.
+moved or were deleted is unaffected: the project-relative suffix is lexical,
+so an old-side path that no longer exists still maps, and `--side old` reads
+its content from `--commit`.
+
+Only aliases of the project root and its ancestors are resolved, such as
+macOS `/var` pointing to `/private/var`. Below that root, the path the user
+gave is the stored identity, not the symlink's destination: `alias.txt`
+remains `alias.txt` whether passed relative or absolute. This also applies
+to symlinked directories inside the project, even when a link points outside
+it. The plugin never resolves a file's symlinks before handing its absolute
+path to the CLI.
 
 The plugin runs no git command to place a comment, and the CLI refuses an
 absolute path outside the project with exit code 1. The rules live in

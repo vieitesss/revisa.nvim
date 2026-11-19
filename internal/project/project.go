@@ -87,39 +87,39 @@ func (p Project) Dir() string {
 
 // Relative maps path to the one the store keeps, relative to the project
 // root, with slash separators. A relative path is taken as already
-// relative; an absolute one must be inside the root. The file need not
-// exist, so an old-side path survives a rename.
+// relative; an absolute one must be inside the root. Only aliases of the
+// root and its ancestors are resolved; the suffix stays lexical, even
+// through in-project symlinks. The file need not exist, so an old-side
+// path survives a rename.
 func (p Project) Relative(path string) (string, error) {
 	if !filepath.IsAbs(path) {
 		return filepath.ToSlash(filepath.Clean(path)), nil
 	}
 	root := p.Dir()
-	rel, err := filepath.Rel(resolved(root), resolved(path))
+	realRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		return "", err
 	}
-	if !filepath.IsLocal(rel) {
-		return "", OutsideError{Path: path, Root: root}
-	}
-	return filepath.ToSlash(rel), nil
-}
-
-// resolved returns path with its symlinks resolved: git reports the real
-// path, which differs from the one a caller may hold, as on macOS where
-// /var is a link. Parts below the deepest path that exists are kept, so a
-// path already renamed away resolves too.
-func resolved(path string) string {
-	rest := ""
-	for current := path; ; current = filepath.Dir(current) {
-		real, err := filepath.EvalSymlinks(current)
-		if err == nil {
-			return filepath.Join(real, rest)
+	separator := string(filepath.Separator)
+	dir := filepath.VolumeName(path) + separator
+	rest := strings.TrimPrefix(filepath.Clean(path), dir)
+	// Stop at the first spelling of the root, before resolving any of
+	// the suffix: a symlink inside the project is part of its identity.
+	for {
+		real, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			break
 		}
-		if filepath.Dir(current) == current {
-			return path
+		if real == realRoot {
+			return filepath.ToSlash(filepath.Clean(rest)), nil
 		}
-		rest = filepath.Join(filepath.Base(current), rest)
+		if rest == "" {
+			break
+		}
+		next, tail, _ := strings.Cut(rest, separator)
+		dir, rest = filepath.Join(dir, next), tail
 	}
+	return "", OutsideError{Path: path, Root: root}
 }
 
 // Branch returns the current branch, or "" on a detached HEAD.

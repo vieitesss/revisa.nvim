@@ -1,0 +1,12 @@
+local buf = H.open()
+local found = require("revisa.display").refresh(buf)
+H.equal(vim.api.nvim_buf_get_name(buf), found.absolute)
+H.display(buf, 1, 1, { "Existing alias comment" })
+
+vim.cmd("2Revisa comment")
+local editor = H.float()
+vim.api.nvim_buf_set_lines(editor, 0, -1, false, { "New alias comment" })
+vim.cmd("write")
+local drawn = require("revisa.display").at(buf, 2)
+H.equal(1, #drawn)
+H.equal("New alias comment", drawn[1].comment.body)

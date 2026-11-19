@@ -84,6 +84,36 @@ func TestAddMapsAnAbsolutePathToTheProjectRoot(t *testing.T) {
 	}
 }
 
+func TestAddAndListKeepASymlinkedFilesPath(t *testing.T) {
+	for _, kind := range []string{"git", "outside git"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			if kind == "git" {
+				root = normalClone(t).worktrees[1]
+			}
+			writeFile(t, root, "real.txt", "anchor\n")
+			absolute := filepath.Join(root, "alias.txt")
+			if err := os.Symlink("real.txt", absolute); err != nil {
+				t.Fatal(err)
+			}
+			for _, path := range []string{"alias.txt", absolute} {
+				id := addOK(t, root, "--path", path,
+					"--lines", "1", "--body", "Alias")
+				got := listJSON(t, root, "--file", absolute)
+				if len(got) == 0 || got[len(got)-1]["id"] != id {
+					t.Fatalf("list --file %q missed %s: %v",
+						absolute, id, got)
+				}
+				for _, c := range got {
+					if c["path"] != "alias.txt" {
+						t.Errorf("path: got %#v, want alias.txt", c["path"])
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestAddAcceptsAnAbsolutePathToAGoneFileOnTheOldSide(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
