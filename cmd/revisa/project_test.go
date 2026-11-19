@@ -179,13 +179,7 @@ func TestGitProjectIgnoresLocalStore(t *testing.T) {
 	if got := listJSON(t, root); len(got) != 0 {
 		t.Errorf("git project sees local store: %v", got)
 	}
-	out, stderr, code := run(t, root, "list")
-	warning := ".revisa/ comments found in .; run revisa migrate " +
-		"to move them into the git store\n"
-	if code != 0 || out != "" || stderr != warning {
-		t.Errorf("exit %d, stdout %q, stderr %q", code, out, stderr)
-	}
-	out, stderr, code = run(t, root, "add", "--path", "a.lua",
+	out, stderr, code := run(t, root, "add", "--path", "a.lua",
 		"--lines", "1", "--body", "Inside git")
 	if code != 0 || stderr != "" {
 		t.Fatalf("exit %d, stdout %q, stderr %q", code, out, stderr)

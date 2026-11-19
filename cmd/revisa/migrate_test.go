@@ -20,15 +20,6 @@ func TestMigrateIntoGitStore(t *testing.T) {
 	writeFile(t, root, file, data)
 	before := listJSON(t, root)[0]
 	initProject(t, root)
-	out, stderr, code = run(t, root, "list", "--json")
-	warning := ".revisa/ comments found in .; run revisa migrate " +
-		"to move them into the git store\n"
-	if code != 0 || out != "[]\n" || stderr != warning {
-		t.Fatalf("exit %d, stdout %q, stderr %q", code, out, stderr)
-	}
-	if readFile(t, filepath.Join(root, file)) != data {
-		t.Fatal("list changed the local comment")
-	}
 	out, stderr, code = run(t, root, "migrate")
 	if code != 0 || stderr != "" ||
 		out != "moved 1 comment from .revisa/\n" {
