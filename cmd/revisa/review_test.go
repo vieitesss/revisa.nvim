@@ -16,7 +16,6 @@ func reviewEnv(t *testing.T, p project, linked, kind string) []string {
 		"REVISA_CASE=" + kind,
 		"REVISA_FILE=" + filepath.Join(main, "src/a.lua"),
 		"REVISA_TARGET=" + linked,
-		"REVISA_WORKTREE=" + linked,
 		"REVISA_EXPECT=" + realPath(t, linked),
 		"REVISA_MAIN=" + realPath(t, main),
 		"REVISA_BASE=" + base[:7],

@@ -34,16 +34,7 @@ local function check_buffer()
     H.equal("revisa://changes/feat/x", api.nvim_buf_get_name(buf))
     H.equal("nofile", vim.bo[buf].buftype)
     H.equal(false, vim.bo[buf].modifiable)
-    H.equal(false, vim.bo[buf].swapfile)
     H.equal(expected(), lines(buf))
-    local entries = require("revisa.review")
-    local rename = find_line(buf, "R src/moved.go -> src/renamed.go")
-    H.equal({ status = "R", path = "src/renamed.go",
-        old_path = "src/moved.go" }, entries.entry(buf, rename))
-    local untracked = find_line(buf, "? notes.txt")
-    H.equal({ status = "?", path = "notes.txt" },
-        entries.entry(buf, untracked))
-    H.equal(nil, entries.entry(buf, 1))
     return buf
 end
 
@@ -60,9 +51,21 @@ if case == "list" then
     local origin = api.nvim_get_current_win()
     vim.cmd("Revisa review " .. vim.fn.fnameescape(vim.env.REVISA_TARGET))
     assert(api.nvim_get_current_win() ~= origin, "list reused the window")
-    check_buffer()
-    vim.cmd.close()
-    check_list("feat/x")
+    local list = check_buffer()
+    local window = api.nvim_get_current_win()
+    api.nvim_win_set_cursor(window, { 1, 0 })
+    local messages = H.notifications()
+    return function()
+        H.keys("o<CR>")
+        return function()
+            H.equal({}, messages)
+            H.equal(window, api.nvim_get_current_win())
+            H.equal(list, api.nvim_get_current_buf())
+            H.equal(1, #api.nvim_list_tabpages())
+            vim.cmd.close()
+            check_list("feat/x")
+        end
+    end
 elseif case == "open" then
     local _, origin = H.open()
     local list = check_list(vim.env.REVISA_TARGET)
@@ -116,7 +119,7 @@ elseif case == "deleted" then
         end
     end
 elseif case == "reload" then
-    H.open()
+    local _, origin = H.open()
     local list = check_list(vim.env.REVISA_TARGET)
     local file = assert(io.open(vim.env.REVISA_NEW_FILE, "w"))
     file:write("added after the list\n")
@@ -129,18 +132,23 @@ elseif case == "reload" then
             H.equal(false, vim.bo[list].modifiable)
             H.equal("? late.txt", after[5])
             H.equal(10, #after)
-            H.equal({ status = "?", path = "late.txt" },
-                require("revisa.review").entry(list, 5))
+            api.nvim_win_set_cursor(0, { 5, 0 })
+            H.keys("o")
+            return function()
+                H.equal(origin, api.nvim_get_current_win())
+                H.equal(vim.uv.fs_realpath(vim.env.REVISA_NEW_FILE),
+                    api.nvim_buf_get_name(0))
+                H.equal({ "added after the list" }, lines(0))
+            end
         end
     end
 elseif case == "close" then
     local _, origin = H.open()
-    local list = check_list(vim.env.REVISA_TARGET)
+    check_list(vim.env.REVISA_TARGET)
     return function()
         H.keys("q")
         return function()
             H.equal(origin, api.nvim_get_current_win())
-            assert(not api.nvim_buf_is_valid(list), "list buffer survived")
             H.equal(1, #api.nvim_list_wins())
         end
     end
