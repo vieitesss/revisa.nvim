@@ -14,12 +14,5 @@ H.equal({ { line = 3, text = ">", group = "RevisaSign" } }, H.signs(buf))
 vim.cmd("vertical resize 40")
 -- The resize redraw runs when the window change settles.
 return function()
-    H.equal({ { line = 3, text = ">", group = "RevisaSign" } }, H.signs(buf))
-    H.equal({
-        {
-            row = 3,
-            above = true,
-            lines = { { { "Shrunk", "RevisaComment" } } },
-        },
-    }, H.virtual(buf))
+    H.display(buf, 3, 3, { "Shrunk" })
 end

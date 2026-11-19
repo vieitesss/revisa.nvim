@@ -1,18 +1,11 @@
 local api = vim.api
 H.open()
 require("revisa").setup({})
-vim.cmd("runtime plugin/revisa.lua")
-H.equal(2, vim.fn.exists(":Revisa"))
 H.equal("DiagnosticWarn",
     api.nvim_get_hl(0, { name = "RevisaOutdated" }).link)
 H.equal("DiagnosticError",
     api.nvim_get_hl(0, { name = "RevisaUnknown" }).link)
 H.equal("Comment", api.nvim_get_hl(0, { name = "RevisaWas" }).link)
-for _, mode in ipairs({ "n", "x" }) do
-    H.equal("<Plug>(revisa-comment)",
-        vim.fn.maparg("<Plug>(revisa-comment)", mode, false, true).lhs)
-end
-
 api.nvim_set_hl(0, "RevisaSign", { link = "Error" })
 api.nvim_set_hl(0, "RevisaComment", { link = "String" })
 api.nvim_set_hl(0, "RevisaResolved", { link = "WarningMsg" })

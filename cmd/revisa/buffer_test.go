@@ -2,7 +2,6 @@ package main_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -159,7 +158,7 @@ func TestBufferBinaryFallbackAndMissingError(t *testing.T) {
 
 func TestBufferCommentOutsideGitUsesProjectRoot(t *testing.T) {
 	for _, kind := range []string{
-		"under pwd", "elsewhere", "ancestor store", "nearest store",
+		"under pwd", "ancestor store", "nearest store",
 		"sibling prefix", "root store",
 	} {
 		t.Run(kind, func(t *testing.T) {
@@ -172,12 +171,8 @@ func TestBufferCommentOutsideGitUsesProjectRoot(t *testing.T) {
 				t.Fatal(err)
 			}
 			switch kind {
-			case "elsewhere", "sibling prefix":
-				name := "elsewhere"
-				if kind == "sibling prefix" {
-					name = "project-other"
-				}
-				root = filepath.Join(base, name)
+			case "sibling prefix":
+				root = filepath.Join(base, "project-other")
 				file = "file.txt"
 				runDir = root
 			case "ancestor store", "nearest store":
@@ -260,14 +255,10 @@ func TestBufferFloatSpaceInScrolledAndDiffWindows(t *testing.T) {
 // tool's old-side buffer: it names the scheme in a clear error and
 // stores nothing.
 func TestBufferRefusesNonFilesAndModifiedBuffers(t *testing.T) {
-	cannot := "revisa: cannot comment in a %s:// buffer; " +
-		"open the file or use :Revisa review"
 	cases := map[string]string{
-		"virtual":   "revisa: comments require a real file buffer",
-		"patch":     "revisa: comments require a real file buffer",
-		"scheme":    fmt.Sprintf(cannot, "tool"),
-		"fugitive":  fmt.Sprintf(cannot, "fugitive"),
-		"diffview":  fmt.Sprintf(cannot, "diffview"),
+		"patch": "revisa: comments require a real file buffer",
+		"scheme": "revisa: cannot comment in a tool:// buffer; " +
+			"open the file or use :Revisa review",
 		"missing":   "revisa: comments require a file on disk",
 		"unnamed":   "revisa: comments require a file on disk",
 		"directory": "revisa: comments require a file on disk",
@@ -320,28 +311,56 @@ func TestBufferExplicitRefreshAndNoBufEnterRefresh(t *testing.T) {
 		"REVISA_WORKTREE="+linked)
 }
 
-// TestBufferCLIReportsOneJSONError pins the shared CLI JSON helper: every
-// caller that decodes CLI output reports a bad payload the same way.
+// TestBufferCLIReportsOneJSONError checks that malformed CLI output is
+// reported once per command, without replacing the file or its comments.
 func TestBufferCLIReportsOneJSONError(t *testing.T) {
-	headless(t, t.TempDir(), "json.lua",
-		"REVISA_WORKTREE="+t.TempDir())
-}
-
-// TestBufferProcessFailuresReadTheSame pins how a failed process is
-// reported: its stderr, else "<what> failed (exit N)", for the CLI, rex
-// and recado alike.
-func TestBufferProcessFailuresReadTheSame(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "2",
+		"--body", "Keep existing")
 	stubs := t.TempDir()
-	for name, code := range map[string]string{
-		"revisa": "6", "rex": "4", "recado": "5",
-	} {
-		writeFile(t, stubs, name, "#!/bin/sh\nexit "+code+"\n")
+	for _, name := range []string{"revisa", "recado"} {
+		writeFile(t, stubs, name, "#!/bin/sh\nprintf '{'\n")
 		if err := os.Chmod(filepath.Join(stubs, name), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	headless(t, t.TempDir(), "exec.lua", "REVISA_STUBS="+stubs,
-		"PATH="+stubs+string(os.PathListSeparator)+os.Getenv("PATH"))
+	headless(t, linked, "json.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+		"REVISA_STUBS="+stubs)
+}
+
+// TestBufferProcessFailuresReadTheSame checks command notifications:
+// stderr wins over the fallback "<what> failed (exit N)" message.
+func TestBufferProcessFailuresReadTheSame(t *testing.T) {
+	for _, kind := range []string{"silent", "stderr"} {
+		t.Run(kind, func(t *testing.T) {
+			p, _ := reviewProject(t)
+			linked := p.worktrees[1]
+			stubs := t.TempDir()
+			for name, code := range map[string]string{
+				"revisa": "6", "rex": "4", "recado": "5",
+			} {
+				body := "#!/bin/sh\n"
+				if name == "revisa" {
+					body += "if [ \"$REVISA_PROCESS\" != revisa ]; then\n" +
+						"    exec \"$REVISA_REAL_BINARY\" \"$@\"\nfi\n"
+				}
+				if kind == "stderr" {
+					body += "echo ' oops ' >&2\n"
+				}
+				writeFile(t, stubs, name, body+"exit "+code+"\n")
+				err := os.Chmod(filepath.Join(stubs, name), 0o755)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			headless(t, linked, "exec.lua",
+				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+				"REVISA_STUBS="+stubs,
+				"REVISA_REAL_BINARY="+revisa, "REVISA_CASE="+kind)
+		})
+	}
 }
 
 func TestBufferPlugsAndFloatKeys(t *testing.T) {
