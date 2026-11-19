@@ -117,10 +117,9 @@ function M.place(comment, target, line_count, with_resolved, width)
     if comment.status == "resolved" and not with_resolved then
         return hidden("resolved hidden")
     end
-    if comment.condition == "outdated" or comment.condition == "unknown" then
+    if comment.condition == "outdated" then
         return {
             kind = "marker",
-            condition = comment.condition,
             body = body_lines(comment, width),
             was = was_lines(comment, width),
         }

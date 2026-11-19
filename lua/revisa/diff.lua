@@ -109,8 +109,8 @@ function M.open(change)
         local buf = scratch("revisa://deleted/" .. change.path, "", nil)
         api.nvim_win_set_buf(0, buf)
         pin(buf, change.worktree, change.branch, change.path, "new")
-        -- This buffer is never read, so its end block of outdated and
-        -- unknown comments is drawn here instead of on BufReadPost.
+        -- This buffer is never read, so its end block of outdated
+        -- comments is drawn here instead of on BufReadPost.
         require("revisa.display").refresh(buf)
         newWin = api.nvim_get_current_win()
     else

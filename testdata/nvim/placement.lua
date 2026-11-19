@@ -92,13 +92,15 @@ H.equal({
         row = 2,
         above = true,
         lines = {
-            { { "outdated (1)", "RevisaOutdated" } },
+            { { "outdated (2)", "RevisaOutdated" } },
             { { "Gone line", "RevisaComment" } },
             { { "was: not here", "RevisaWas" } },
+            { { "Another body", "RevisaComment" } },
+            { { "was: also gone", "RevisaWas" } },
         },
     },
 }, H.virtual(gone))
-H.equal({ { "revisa: 1 outdated", "RevisaOutdated" } }, H.text(gone))
+H.equal({ { "revisa: 2 outdated", "RevisaOutdated" } }, H.text(gone))
 
 -- a non-file target draws nothing and says why
 local messages = H.notifications()

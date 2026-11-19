@@ -2,7 +2,6 @@ package main_test
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -81,6 +80,8 @@ func placementProject(t *testing.T) (p project, base, head string) {
 			"Other file body", head, "", "", 1, 1},
 		{"01JC8Z7K3M9QX2V5T1R4N6P8X3", "src/outdated.lua", "new",
 			"not here", "Gone line", head, "", "", 2, 2},
+		{"01JC8Z7K3M9QX2V5T1R4N6P8Y3", "src/outdated.lua", "new",
+			"also gone", "Another body", head, "", "", 1, 1},
 		{"01JC8Z7K3M9QX2V5T1R4N6P8X4", "src/outdated-long.lua", "new",
 			"local value = something", "Gone line", head, "", "", 3, 3},
 		{"01JC8Z7K3M9QX2V5T1R4N6P8X5", "src/wrap.txt", "new",
@@ -118,56 +119,4 @@ func TestBufferCommentPlacementAndWrapping(t *testing.T) {
 		"REVISA_WRAP="+filepath.Join(linked, "src/wrap.txt"),
 		"REVISA_BASE="+base,
 		"REVISA_HEAD="+head)
-}
-
-// stubCLI puts a revisa executable that answers every call with payload in
-// front of PATH, for a state the CLI reports but a store cannot hold.
-func stubCLI(t *testing.T, payload string) string {
-	t.Helper()
-	dir := t.TempDir()
-	writeFile(t, dir, "list.json", payload+"\n")
-	script := "#!/bin/sh\ncat \"$(dirname \"$0\")/list.json\"\n"
-	err := os.WriteFile(filepath.Join(dir, "revisa"), []byte(script), 0o755)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return dir
-}
-
-func TestBufferUnknownCommentsDrawEndBlock(t *testing.T) {
-	root := t.TempDir()
-	writeFile(t, root, "a.txt", "one\ntwo\n")
-	stub := stubCLI(t, `[
-  {
-    "id": "01JC8Z7K3M9QX2V5T1R4N6P8WY",
-    "branch": "feat/x",
-    "path": "a.txt",
-    "side": "new",
-    "anchor_text": "one\ntwo",
-    "commit": "abc123",
-    "body": "The branch is gone",
-    "status": "open",
-    "reply": null,
-    "line_start": null,
-    "line_end": null,
-    "condition": "unknown"
-  },
-  {
-    "id": "01JC8Z7K3M9QX2V5T1R4N6P8WZ",
-    "branch": "feat/x",
-    "path": "a.txt",
-    "side": "new",
-    "anchor_text": "three",
-    "commit": "abc123",
-    "body": "Gone line",
-    "status": "open",
-    "reply": null,
-    "line_start": null,
-    "line_end": null,
-    "condition": "outdated"
-  }
-]`)
-	headless(t, root, "unknown.lua",
-		"REVISA_FILE="+filepath.Join(root, "a.txt"),
-		"PATH="+stub+string(os.PathListSeparator)+os.Getenv("PATH"))
 }

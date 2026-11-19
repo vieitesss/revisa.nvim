@@ -47,11 +47,6 @@ local function buffers()
     return bufs
 end
 
-local groups = {
-    { condition = "outdated", group = "RevisaOutdated" },
-    { condition = "unknown", group = "RevisaUnknown" },
-}
-
 -- signs marks the lines of an anchored comment. It returns the extmarks
 -- of the first and last signs, so a later redraw can read the lines they
 -- moved to. A sign whose line is deleted comes back marked invalid, which
@@ -78,46 +73,14 @@ local function body(buf, placed)
 end
 
 local function block(markers)
-    local counts = {}
-    for _, group in ipairs(groups) do
-        counts[group.condition] = 0
-    end
+    local lines = {
+        { { "outdated (" .. #markers .. ")", "RevisaOutdated" } },
+    }
     for _, placed in ipairs(markers) do
-        counts[placed.condition] = counts[placed.condition] + 1
+        vim.list_extend(lines, placed.body)
+        vim.list_extend(lines, placed.was)
     end
-    local lines = {}
-    for _, group in ipairs(groups) do
-        local count = counts[group.condition]
-        if count > 0 then
-            if #lines > 0 then
-                lines[#lines + 1] = { { "", "RevisaComment" } }
-            end
-            lines[#lines + 1] = {
-                { group.condition .. " (" .. count .. ")", group.group },
-            }
-            for _, placed in ipairs(markers) do
-                if placed.condition == group.condition then
-                    vim.list_extend(lines, placed.body)
-                    vim.list_extend(lines, placed.was)
-                end
-            end
-        end
-    end
-    return lines, counts
-end
-
-local function summary(counts)
-    local parts = {}
-    for _, group in ipairs(groups) do
-        local count = counts[group.condition]
-        if count > 0 then
-            parts[#parts + 1] = count .. " " .. group.condition
-        end
-    end
-    if #parts == 0 then
-        return nil
-    end
-    return "revisa: " .. table.concat(parts, ", ")
+    return lines
 end
 
 -- draw draws one file version's comments into buf, replacing the last
@@ -189,18 +152,19 @@ local function draw(buf, target, comments, moved)
             markers[#markers + 1] = one
         end
     end
-    local lines, counts = block(markers)
-    if #lines == 0 then
+    if #markers == 0 then
         return
     end
     -- virt_lines_above on the line past the end is what renders below the
     -- last line: the same extmark without it is stored but never drawn.
     api.nvim_buf_set_extmark(buf, namespace, count, 0, {
-        virt_lines = lines,
+        virt_lines = block(markers),
         virt_lines_above = true,
     })
     api.nvim_buf_set_extmark(buf, namespace, 0, 0, {
-        virt_text = { { summary(counts), "RevisaOutdated" } },
+        virt_text = {
+            { "revisa: " .. #markers .. " outdated", "RevisaOutdated" },
+        },
         virt_text_pos = "right_align",
     })
 end

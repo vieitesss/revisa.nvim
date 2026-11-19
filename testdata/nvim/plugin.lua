@@ -3,15 +3,12 @@ H.open()
 require("revisa").setup({})
 H.equal("DiagnosticWarn",
     api.nvim_get_hl(0, { name = "RevisaOutdated" }).link)
-H.equal("DiagnosticError",
-    api.nvim_get_hl(0, { name = "RevisaUnknown" }).link)
 H.equal("Comment", api.nvim_get_hl(0, { name = "RevisaWas" }).link)
 api.nvim_set_hl(0, "RevisaSign", { link = "Error" })
 api.nvim_set_hl(0, "RevisaComment", { link = "String" })
 api.nvim_set_hl(0, "RevisaResolved", { link = "WarningMsg" })
 api.nvim_set_hl(0, "RevisaReply", { link = "Title" })
 api.nvim_set_hl(0, "RevisaOutdated", { link = "WarningMsg" })
-api.nvim_set_hl(0, "RevisaUnknown", { link = "ErrorMsg" })
 api.nvim_set_hl(0, "RevisaWas", { link = "String" })
 vim.g.loaded_revisa = nil
 vim.cmd("runtime plugin/revisa.lua")
@@ -22,8 +19,6 @@ H.equal("WarningMsg",
 H.equal("Title", api.nvim_get_hl(0, { name = "RevisaReply" }).link)
 H.equal("WarningMsg",
     api.nvim_get_hl(0, { name = "RevisaOutdated" }).link)
-H.equal("ErrorMsg",
-    api.nvim_get_hl(0, { name = "RevisaUnknown" }).link)
 H.equal("String", api.nvim_get_hl(0, { name = "RevisaWas" }).link)
 
 local messages = H.notifications()
@@ -46,8 +41,6 @@ H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))
 vim.cmd("help :Revisa-send")
 H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))
 vim.cmd("help RevisaOutdated")
-H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))
-vim.cmd("help RevisaUnknown")
 H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))
 vim.cmd("help RevisaWas")
 H.equal("revisa.txt", vim.fs.basename(api.nvim_buf_get_name(0)))
