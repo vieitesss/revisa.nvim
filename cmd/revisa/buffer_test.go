@@ -426,6 +426,30 @@ func TestBufferRewrapKeepsCommentsOnTheirLines(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
 }
 
+// TestBufferRewrapKeepsCommentWhenLinesAboveAreDeleted pins the redraw to
+// the lines the signs moved to, even when the CLI's coordinates are past
+// the end of the shrunken buffer.
+func TestBufferRewrapKeepsCommentWhenLinesAboveAreDeleted(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "5",
+		"--body", "Shrunk")
+	headless(t, p.worktrees[0], "moved-redraw-shrink.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+}
+
+// TestBufferRewrapHidesCommentWhoseLinesWereDeleted pins a redraw to hide
+// a comment whose anchor is gone, rather than drawing past the end of the
+// buffer or guessing a line for it.
+func TestBufferRewrapHidesCommentWhoseLinesWereDeleted(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "2",
+		"--body", "Deleted anchor")
+	headless(t, p.worktrees[0], "moved-redraw-deleted.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+}
+
 // TestBufferCommentWrapsInsideSignColumn pins the wrap width to the text
 // width the window has once the comment signs widen the gutter.
 func TestBufferCommentWrapsInsideSignColumn(t *testing.T) {

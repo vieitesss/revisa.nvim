@@ -18,16 +18,19 @@ local function width(buf)
     return math.max(20, cells)
 end
 
--- place is where one comment is drawn at: its own lines, else the lines
--- its signs have moved to since.
+-- place is where one comment is drawn at: the lines its signs moved to,
+-- else its own. A comment whose lines were deleted is hidden, never put
+-- back on the CLI's last coordinates.
 local function place(comment, where, moved)
-    local placed = placement.place(comment, where.target, where.count,
-        where.show_resolved, where.cells)
     local now = moved[comment]
-    if now and placed.kind == "anchored" then
-        placed.line_start, placed.line_end = now.line_start, now.line_end
+    if now and now.deleted then
+        return { kind = "hidden", why = "lines deleted" }
     end
-    return placed
+    if now then
+        comment = vim.tbl_extend("force", comment, now)
+    end
+    return placement.place(comment, where.target, where.count,
+        where.show_resolved, where.cells)
 end
 
 -- waiting reports whether win keeps its sign column hidden until a sign
@@ -59,13 +62,15 @@ local groups = {
 
 -- signs marks the lines of an anchored comment. It returns the extmarks
 -- of the first and last signs, so a later redraw can read the lines they
--- moved to.
+-- moved to. A sign whose line is deleted comes back marked invalid, which
+-- is how a redraw tells a deleted anchor from a moved one.
 local function signs(buf, placed)
     local first, last
     for line = placed.line_start, placed.line_end do
         last = api.nvim_buf_set_extmark(buf, namespace, line - 1, 0, {
             sign_text = placed.sign,
             sign_hl_group = placed.group,
+            invalidate = true,
         })
         first = first or last
     end
@@ -139,6 +144,12 @@ function M.draw(buf, target, comments, show_resolved, moved)
     end
     local count = api.nvim_buf_line_count(buf)
     moved = moved or {}
+    local deleted = {}
+    for comment, now in pairs(moved) do
+        if now.deleted then
+            deleted[comment] = true
+        end
+    end
     local where = {
         target = target, count = count, show_resolved = show_resolved,
         cells = width(buf),
@@ -159,7 +170,7 @@ function M.draw(buf, target, comments, show_resolved, moved)
     end
     drawn[buf] = {
         target = target, comments = comments, show_resolved = show_resolved,
-        anchors = anchors,
+        anchors = anchors, deleted = deleted,
     }
     -- A sign column that 'signcolumn' keeps hidden until a sign shows is
     -- laid out on the next redraw, so the bodies are wrapped after it.
@@ -202,32 +213,51 @@ function M.draw(buf, target, comments, show_resolved, moved)
     })
 end
 
+-- row is the line one anchor sign is on now, or nil when its line is
+-- deleted or past the end of the buffer.
+local function row(buf, id, count)
+    local mark = api.nvim_buf_get_extmark_by_id(buf, namespace, id,
+        { details = true })
+    if #mark == 0 or (mark[3] and mark[3].invalid) then
+        return nil
+    end
+    local line = mark[1] + 1
+    if line < 1 or line > count then
+        return nil
+    end
+    return line
+end
+
 -- moved is the lines each comment is on now, read from its signs before
 -- a draw clears them: a line inserted above moves the comment, and a
 -- redraw must keep it there rather than in the CLI's last coordinates.
+-- A comment whose signs are gone is recorded as deleted.
 local function moved(buf, anchors)
+    local count = api.nvim_buf_line_count(buf)
     local rows = {}
     for _, anchor in ipairs(anchors) do
-        local first = api.nvim_buf_get_extmark_by_id(buf, namespace,
-            anchor.first, {})
-        local last = api.nvim_buf_get_extmark_by_id(buf, namespace,
-            anchor.last, {})
-        if #first == 2 and #last == 2 then
-            rows[anchor.comment] = {
-                line_start = first[1] + 1, line_end = last[1] + 1,
-            }
+        local first = row(buf, anchor.first, count)
+        local last = row(buf, anchor.last, count)
+        if first and last then
+            rows[anchor.comment] = { line_start = first, line_end = last }
+        else
+            rows[anchor.comment] = { deleted = true }
         end
     end
     return rows
 end
 
 -- redraw draws every loaded buffer again from its last draw, for a window
--- size change.
+-- size change. A comment deleted since the last draw stays hidden: only a
+-- refresh from the CLI gives it a line again.
 function M.redraw()
     for _, buf in ipairs(M.buffers()) do
         local last = drawn[buf]
-        M.draw(buf, last.target, last.comments, last.show_resolved,
-            moved(buf, last.anchors))
+        local now = moved(buf, last.anchors)
+        for comment in pairs(last.deleted) do
+            now[comment] = { deleted = true }
+        end
+        M.draw(buf, last.target, last.comments, last.show_resolved, now)
     end
 end
 
