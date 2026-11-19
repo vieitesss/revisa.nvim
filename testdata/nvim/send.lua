@@ -94,6 +94,11 @@ elseif case == "cancel" then
     send()
     check_offers(1)
     H.equal(0, #messages)
+elseif case == "file" then
+    H.open()
+    send()
+    check_offers(1)
+    check_messages()
 elseif case == "changes" then
     check_list()
     send()

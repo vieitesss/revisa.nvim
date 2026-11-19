@@ -348,7 +348,7 @@ func TestBufferSendQuotesTheBranchInTheMessage(t *testing.T) {
 }
 
 func TestBufferSendChoosesTheWorktreeUnderReview(t *testing.T) {
-	for _, kind := range []string{"argument", "changes", "diff"} {
+	for _, kind := range []string{"argument", "changes", "diff", "file"} {
 		t.Run(kind, func(t *testing.T) {
 			p, _ := reviewProject(t)
 			linked := p.worktrees[1]
@@ -364,10 +364,12 @@ func TestBufferSendChoosesTheWorktreeUnderReview(t *testing.T) {
 				"REVISA_CASE=" + kind,
 				"REVISA_SETTING=recado",
 				"REVISA_FILE=" + file,
-				"REVISA_TARGET=feat/x",
 				"REVISA_OFFERS=1",
 				"REVISA_PANES=claude  " + linked + "  feat/x",
 				"REVISA_SENT=claude in " + linked,
+			}
+			if kind != "file" {
+				env = append(env, "REVISA_TARGET=feat/x")
 			}
 			sendCase(t, p.worktrees[0], stub, env...)
 			equalStrings(t, "argv", wantArgv("match"),

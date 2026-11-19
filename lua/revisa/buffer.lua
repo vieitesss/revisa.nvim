@@ -23,46 +23,18 @@ local function contains(root, path)
         or root == "/"
 end
 
+-- M.context returns where the CLI runs for buf's file, and the file's
+-- absolute path. The CLI maps that path to the project and the store.
 function M.context(buf)
     local path, err = M.file(buf)
     if not path then
         return nil, err
     end
-    local dir = vim.fs.dirname(path)
-    local git = { code = 1 }
-    if vim.fn.executable("git") == 1 then
-        git = vim.system({
-            "git", "-C", dir, "rev-parse", "--show-toplevel",
-        }, { text = true }):wait()
+    local cwd = vim.fn.getcwd()
+    if not contains(cwd, path) then
+        cwd = vim.fs.dirname(path)
     end
-    local cwd, root
-    if git.code == 0 then
-        root = git.stdout:gsub("\n$", "")
-        cwd = root
-    else
-        cwd = vim.fn.getcwd()
-        if not contains(cwd, path) then
-            cwd = dir
-        end
-        root = cwd
-        local ancestor = cwd
-        while true do
-            local info = uv.fs_stat(ancestor .. "/.revisa")
-            if info and info.type == "directory" then
-                root = ancestor
-                break
-            end
-            local parent = vim.fs.dirname(ancestor)
-            if parent == ancestor then
-                break
-            end
-            ancestor = parent
-        end
-    end
-    return {
-        cwd = cwd,
-        path = path:sub(#root + (root == "/" and 1 or 2)),
-    }
+    return { cwd = cwd, path = path }
 end
 
 return M

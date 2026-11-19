@@ -292,15 +292,14 @@ function M.send(request)
     end
     local found = target.of(api.nvim_get_current_buf())
     local dir, named = review.cliDir(request)
-    local worktreePath = named
-    if worktreePath == nil or worktreePath == "" then
-        worktreePath = found and found.worktree
+    local worktree = named
+    if worktree == nil or worktree == "" then
+        worktree = found and found.worktree
     end
-    if not worktreePath then
-        cli.error("revisa: :Revisa send needs a worktree, pass one")
-        return
+    local args = { "changes", "--json" }
+    if worktree then
+        vim.list_extend(args, { "--worktree", worktree })
     end
-    local args = { "changes", "--json", "--worktree", worktreePath }
     local data = cli.json({ cwd = dir }, args)
     if not data then
         return

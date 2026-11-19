@@ -170,8 +170,8 @@ local function draw(buf, target, comments, moved)
 end
 
 -- refresh draws buf's comments from the CLI: the file version the buffer
--- shows, the comments stored for it, and where they sit now. It returns
--- that file target, or nil after reporting an error.
+-- shows, the comments stored for that file, and where they sit now. It
+-- returns that file target, or nil after reporting an error.
 function M.refresh(buf)
     buf = buf or api.nvim_get_current_buf()
     local found, err = targets.file(targets.of(buf))
@@ -179,7 +179,8 @@ function M.refresh(buf)
         cli.error(err)
         return
     end
-    local comments = cli.json({ cwd = found.cwd }, { "list", "--json" })
+    local comments = cli.json({ cwd = found.cwd },
+        { "list", "--json", "--file", found.absolute })
     if not comments then
         return
     end

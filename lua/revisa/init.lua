@@ -13,7 +13,7 @@ local function refused(buf, what)
 end
 
 local function addArgs(found, lines)
-    local args = { "--path", found.path, "--lines", lines }
+    local args = { "--path", found.absolute, "--lines", lines }
     if found.side == "old" then
         vim.list_extend(args, { "--side", "old",
             "--branch", found.branch, "--commit", found.commit })

@@ -1,8 +1,5 @@
--- The plugin composes a buffer's review target locally; it does not ask the
--- CLI for one. A `revisa context` command was rejected: it would add a process
--- to every refresh and a second JSON contract, while the two discoveries must
--- agree only on the path used to store comments, which the process tests pin.
--- If they drift, the headless target test fails before the buffer does.
+-- The plugin hands absolute paths to the CLI, which alone maps a file to
+-- its project and its store. See docs/adr/0003-cli-maps-files.md.
 
 local M = {}
 local uv = vim.uv
@@ -37,7 +34,7 @@ local function fromPin(pin)
         kind = "file",
         worktree = worktree,
         cwd = worktree,
-        path = pin.path,
+        absolute = worktree .. "/" .. pin.path,
         side = pin.side,
         commit = pin.commit,
         branch = pin.branch,
@@ -61,12 +58,10 @@ function M.of(buf)
     if not context then
         return nil, why
     end
-    local worktree = real(context.cwd)
     return {
         kind = "file",
-        worktree = worktree,
-        cwd = worktree,
-        path = context.path,
+        cwd = real(context.cwd),
+        absolute = real(context.path),
         side = "new",
     }
 end

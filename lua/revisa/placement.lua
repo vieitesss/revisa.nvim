@@ -100,11 +100,9 @@ end
 -- line_count is the buffer's line count, width the cells a virtual line may
 -- take, and with_resolved whether resolved comments are drawn. The rules
 -- apply in order, and a comment with no current lines is hidden, never
--- clamped to the file.
+-- clamped to the file. The CLI lists one file's comments, so place never
+-- sees another file's.
 function M.place(comment, target, line_count, with_resolved, width)
-    if comment.path ~= target.path then
-        return hidden("another file")
-    end
     if comment.side ~= target.side then
         return hidden("another side")
     end
