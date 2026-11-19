@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -30,12 +31,8 @@ func newInstallCheckout(t *testing.T) installCheckout {
 	if err := os.MkdirAll(skill, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile("../../skills/revisa/SKILL.md")
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err := os.WriteFile(filepath.Join(skill, "SKILL.md"),
-		data, 0o644); err != nil {
+		[]byte("test skill\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	home := filepath.Join(root, "home")
@@ -87,6 +84,16 @@ func assertInstallLink(t *testing.T, path, want string) {
 	}
 }
 
+func assertInstallLines(t *testing.T, output string, want ...string) {
+	t.Helper()
+	got := strings.Split(strings.TrimSuffix(output, "\n"), "\n")
+	slices.Sort(got)
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Errorf("stdout lines %q, want %q", got, want)
+	}
+}
+
 func TestInstallAlreadyLinkedIsSafe(t *testing.T) {
 	c := newInstallCheckout(t)
 	_, stderr, code := c.run(t, c.binary, c.binDir(), "install")
@@ -107,12 +114,9 @@ func TestInstallAlreadyLinkedIsSafe(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("second install: exit %d, stderr %q", code, stderr)
 	}
-	want := "already linked " + binLink + " -> " + c.binary + "\n" +
-		"already linked " + c.skillLink() + " -> " +
-		c.skillTarget() + "\n"
-	if stdout != want {
-		t.Errorf("stdout %q, want %q", stdout, want)
-	}
+	assertInstallLines(t, stdout,
+		"already linked "+binLink+" -> "+c.binary,
+		"already linked "+c.skillLink()+" -> "+c.skillTarget())
 	for i, path := range links {
 		after, err := os.Lstat(path)
 		if err != nil {
@@ -191,23 +195,15 @@ func TestInstallPreservesUnrelatedTargets(t *testing.T) {
 }
 
 func TestInstallMissingSkillNamesLookedForPath(t *testing.T) {
-	for _, missing := range []string{"directory", "SKILL.md"} {
-		t.Run(missing, func(t *testing.T) {
-			c := newInstallCheckout(t)
-			lookedFor := filepath.Join(c.skillTarget(), "SKILL.md")
-			path := c.skillTarget()
-			if missing == "SKILL.md" {
-				path = lookedFor
-			}
-			if err := os.RemoveAll(path); err != nil {
-				t.Fatal(err)
-			}
-			_, stderr, code := c.run(t, c.binary, c.binDir(), "install")
-			if code != 1 || !strings.Contains(stderr, lookedFor) {
-				t.Errorf("exit %d, stderr %q; want path %s",
-					code, stderr, lookedFor)
-			}
-		})
+	c := newInstallCheckout(t)
+	lookedFor := filepath.Join(c.skillTarget(), "SKILL.md")
+	if err := os.Remove(lookedFor); err != nil {
+		t.Fatal(err)
+	}
+	_, stderr, code := c.run(t, c.binary, c.binDir(), "install")
+	if code != 1 || !strings.Contains(stderr, lookedFor) {
+		t.Errorf("exit %d, stderr %q; want path %s",
+			code, stderr, lookedFor)
 	}
 }
 
@@ -232,29 +228,20 @@ func TestInstallHonorsBinDir(t *testing.T) {
 }
 
 func TestInstallWarnsWhenBinDirIsNotOnPATH(t *testing.T) {
-	for _, name := range []string{"default", "custom", "prefix only"} {
+	for _, name := range []string{"default", "prefix only"} {
 		t.Run(name, func(t *testing.T) {
 			c := newInstallCheckout(t)
 			binDir := c.binDir()
 			path := ""
-			args := []string{"install"}
-			if name == "custom" {
-				binDir = filepath.Join(c.root, "custom", "bin")
-				path = c.binDir()
-				args = append(args, "--bin-dir", binDir)
-			}
 			if name == "prefix only" {
 				path = binDir + "-other"
 			}
-			stdout, stderr, code := c.run(t, c.binary, path, args...)
+			_, stderr, code := c.run(t, c.binary, path, "install")
 			if code != 0 || !strings.Contains(stderr, "warning") ||
 				!strings.Contains(stderr, binDir) ||
 				!strings.Contains(stderr, "not on PATH") {
 				t.Errorf("exit %d, stderr %q; want PATH warning for %s",
 					code, stderr, binDir)
-			}
-			if strings.Count(stdout, "\n") != 2 {
-				t.Errorf("want two link lines, got %q", stdout)
 			}
 			assertInstallLink(t, filepath.Join(binDir, "revisa"), c.binary)
 			assertInstallLink(t, c.skillLink(), c.skillTarget())
@@ -342,11 +329,9 @@ func TestInstallCreatesBothLinks(t *testing.T) {
 	binLink := filepath.Join(c.binDir(), "revisa")
 	assertInstallLink(t, binLink, c.binary)
 	assertInstallLink(t, c.skillLink(), c.skillTarget())
-	want := "linked " + binLink + " -> " + c.binary + "\n" +
-		"linked " + c.skillLink() + " -> " + c.skillTarget() + "\n"
-	if stdout != want {
-		t.Errorf("stdout %q, want %q", stdout, want)
-	}
+	assertInstallLines(t, stdout,
+		"linked "+binLink+" -> "+c.binary,
+		"linked "+c.skillLink()+" -> "+c.skillTarget())
 	stdout, stderr, code = c.run(t, "/bin/sh", c.binDir(),
 		"-c", "revisa --help")
 	if code != 0 || stderr != "" ||

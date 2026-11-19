@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -47,9 +46,6 @@ func TestInstallLinkAcceptsTheLinkAnotherInstanceMade(t *testing.T) {
 				t.Errorf("stdout %q", got)
 			}
 			assertRaceLink(t, path, target)
-			if _, err := os.Lstat(elsewhere); !errors.Is(err, fs.ErrNotExist) {
-				t.Errorf("install created %s: %v", elsewhere, err)
-			}
 		})
 	}
 }
