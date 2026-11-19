@@ -250,9 +250,8 @@ func TestAddErrors(t *testing.T) {
 			Path: "src/a.lua", Start: 5, End: 6, Side: "new", Body: "b",
 		}, "past the end of src/a.lua (3 lines)",
 			func(t *testing.T, err error) {
-				var pastEnd project.LinesPastEndError
-				if !errors.As(err, &pastEnd) ||
-					pastEnd.LineCount != 3 {
+				pastEnd, ok := errors.AsType[project.LinesPastEndError](err)
+				if !ok || pastEnd.LineCount != 3 {
 					t.Errorf("error %v is not a past-end error",
 						err)
 				}
