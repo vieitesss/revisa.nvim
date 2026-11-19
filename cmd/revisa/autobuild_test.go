@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -31,8 +32,8 @@ printf '%s\n%s\n' "$REVISA_GIT_ROOT" "$REVISA_GIT_REV"
 // buildPlugin is a copy of the plugin in its own git checkout, with a
 // fake go first on PATH.
 type buildPlugin struct {
-	root, rev, goLog, installLog string
-	env                          []string
+	root, goLog, installLog string
+	env                     []string
 }
 
 func newBuildPlugin(t *testing.T) buildPlugin {
@@ -56,7 +57,6 @@ func newBuildPlugin(t *testing.T) buildPlugin {
 	logs := t.TempDir()
 	p := buildPlugin{
 		root:       root,
-		rev:        git(t, root, "rev-parse", "HEAD"),
 		goLog:      filepath.Join(logs, "go"),
 		installLog: filepath.Join(logs, "install"),
 	}
@@ -67,7 +67,7 @@ func newBuildPlugin(t *testing.T) buildPlugin {
 		"REVISA_INSTALL_LOG=" + p.installLog,
 		"REVISA_GIT=" + gitBinary,
 		"REVISA_GIT_ROOT=" + root,
-		"REVISA_GIT_REV=" + p.rev,
+		"REVISA_GIT_REV=" + git(t, root, "rev-parse", "HEAD"),
 		"PATH=" + strings.Join([]string{stubs, filepath.Dir(gitBinary),
 			"/usr/bin", "/bin"}, string(os.PathListSeparator)),
 	}
@@ -86,54 +86,33 @@ func logLines(t *testing.T, path string) []string {
 	return strings.Split(strings.TrimSpace(string(data)), "\n")
 }
 
-func stampOf(t *testing.T, root string) string {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join(root, "bin/.revisa-rev"))
-	if os.IsNotExist(err) {
-		return ""
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	return strings.TrimSpace(string(data))
-}
-
 func TestAutoBuildBuildsAndInstallsWhenTheCommitIsNew(t *testing.T) {
-	for _, kind := range []string{"no stamp", "older stamp"} {
-		t.Run(kind, func(t *testing.T) {
-			p := newBuildPlugin(t)
-			if kind == "older stamp" {
-				writeFile(t, p.root, "bin/.revisa-rev", "0123abc\n")
+	p := newBuildPlugin(t)
+	wantBuilds, wantInstalls := []string{}, []string{}
+	for _, step := range []string{"install", "restart", "update"} {
+		t.Run(step, func(t *testing.T) {
+			if step == "update" {
+				git(t, p.root, "commit", "-q", "--allow-empty",
+					"-m", "update")
+			}
+			outcome := "built"
+			if step == "restart" {
+				outcome = "idle"
+			} else {
+				wantBuilds = append(wantBuilds,
+					"build -o bin/revisa ./cmd/revisa")
+				wantInstalls = append(wantInstalls, "install")
 			}
 			headless(t, t.TempDir(), "build.lua",
-				append(p.env, "REVISA_CASE=built")...)
-			want := []string{"build -o bin/revisa ./cmd/revisa"}
-			if got := logLines(t, p.goLog); !equalLines(got, want) {
-				t.Errorf("go ran %q, want %q", got, want)
+				append(p.env, "REVISA_CASE="+outcome)...)
+			if got := logLines(t, p.goLog); !slices.Equal(got, wantBuilds) {
+				t.Errorf("go ran %q, want %q", got, wantBuilds)
 			}
 			got := logLines(t, p.installLog)
-			if !equalLines(got, []string{"install"}) {
-				t.Errorf("revisa ran %q, want install", got)
-			}
-			if got := stampOf(t, p.root); got != p.rev {
-				t.Errorf("stamp %q, want %q", got, p.rev)
+			if !slices.Equal(got, wantInstalls) {
+				t.Errorf("revisa ran %q, want %q", got, wantInstalls)
 			}
 		})
-	}
-}
-
-func TestAutoBuildSkipsTheBuiltCommit(t *testing.T) {
-	p := newBuildPlugin(t)
-	writeFile(t, p.root, "bin/.revisa-rev", p.rev+"\n")
-	writeFile(t, p.root, "bin/revisa", "#!/bin/sh\n")
-	if err := os.Chmod(filepath.Join(p.root, "bin/revisa"),
-		0o755); err != nil {
-		t.Fatal(err)
-	}
-	headless(t, t.TempDir(), "build.lua",
-		append(p.env, "REVISA_CASE=idle")...)
-	if got := logLines(t, p.goLog); got != nil {
-		t.Errorf("go ran %q for the built commit", got)
 	}
 }
 
@@ -146,8 +125,8 @@ func TestAutoBuildIsOffWhenTheUserTurnsItOff(t *testing.T) {
 	if got := logLines(t, p.goLog); got != nil {
 		t.Errorf("go ran %q with the build turned off", got)
 	}
-	if got := stampOf(t, p.root); got != "" {
-		t.Errorf("stamp %q written with the build turned off", got)
+	if got := logLines(t, p.installLog); got != nil {
+		t.Errorf("revisa ran %q with the build turned off", got)
 	}
 }
 
@@ -158,8 +137,18 @@ func TestAutoBuildReportsAFailedBuild(t *testing.T) {
 	if got := logLines(t, p.installLog); got != nil {
 		t.Errorf("revisa ran %q after a failed build", got)
 	}
-	if got := stampOf(t, p.root); got != "" {
-		t.Errorf("stamp %q written after a failed build", got)
+	headless(t, t.TempDir(), "build.lua",
+		append(p.env, "REVISA_CASE=built")...)
+	want := []string{
+		"build -o bin/revisa ./cmd/revisa",
+		"build -o bin/revisa ./cmd/revisa",
+	}
+	if got := logLines(t, p.goLog); !slices.Equal(got, want) {
+		t.Errorf("go ran %q, want a retry: %q", got, want)
+	}
+	if got := logLines(t, p.installLog); !slices.Equal(got,
+		[]string{"install"}) {
+		t.Errorf("revisa ran %q, want one successful install", got)
 	}
 }
 
@@ -169,12 +158,8 @@ func TestAutoBuildCommandRightAfterLoadReportsTheBuild(t *testing.T) {
 		append(p.env, "REVISA_CASE=immediate", "REVISA_GIT_SLEEP=1")...)
 }
 
-func TestAutoBuildCommandsWaitForTheBuild(t *testing.T) {
+func TestAutoBuildCommandsReportTheRunningBuild(t *testing.T) {
 	p := newBuildPlugin(t)
 	headless(t, t.TempDir(), "build.lua",
 		append(p.env, "REVISA_CASE=building", "REVISA_GO_SLEEP=1")...)
-}
-
-func equalLines(got, want []string) bool {
-	return strings.Join(got, "\n") == strings.Join(want, "\n")
 }

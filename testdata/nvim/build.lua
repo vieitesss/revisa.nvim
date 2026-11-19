@@ -1,14 +1,16 @@
-local build = require("revisa.build")
 local messages = H.notifications()
 
-local function finished()
+local function notified(text)
     for _, message in ipairs(messages) do
-        if message.message:find("CLI built", 1, true)
-            or message.message:find("failed", 1, true) then
+        if message.message:find(text, 1, true) then
             return true
         end
     end
     return false
+end
+
+local function finished()
+    return notified("CLI built") or notified("failed")
 end
 
 local case = vim.env.REVISA_CASE
@@ -16,23 +18,26 @@ if case == "built" then
     assert(vim.wait(10000, finished), "the build did not finish")
     H.equal({ message = "revisa: CLI built", level = vim.log.levels.INFO },
         messages[#messages])
-    H.equal(false, build.building())
 elseif case == "failed" then
     assert(vim.wait(10000, finished), "the build did not finish")
     H.error(messages, "revisa: building the CLI failed: boom")
     H.error(messages, "vim.g.revisa_auto_build = false")
-    H.equal(false, build.building())
+    vim.cmd("Revisa review")
+    H.error(messages, "revisa not found")
 elseif case == "immediate" then
-    require("revisa.cli").run({ cwd = "." }, { "list" })
+    vim.cmd("Revisa review")
     H.error(messages, "revisa: the CLI is still building")
     assert(vim.wait(10000, finished), "the build did not finish")
 elseif case == "building" then
-    assert(vim.wait(10000, build.building), "the build did not start")
-    require("revisa.cli").run({ cwd = "." }, { "list" })
+    assert(vim.wait(10000, function()
+        return notified("revisa: building the CLI")
+    end), "the build did not start")
+    vim.cmd("Revisa review")
     H.error(messages, "revisa: the CLI is still building")
     assert(vim.wait(10000, finished), "the build did not finish")
 elseif case == "idle" then
     vim.wait(500)
-    H.equal(false, build.building())
     H.equal({}, messages)
+else
+    error("unknown case " .. tostring(case))
 end
