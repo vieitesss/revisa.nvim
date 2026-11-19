@@ -24,7 +24,8 @@ func headless(t *testing.T, dir, script string, env ...string) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, nvim, "--headless", "--clean",
 		"--cmd", "lua vim.opt.rtp:prepend(vim.env.REVISA_PLUGIN)",
-		"--cmd", "set loadplugins",
+		"--cmd", "if $REVISA_PLUGIN_LOAD ==# 'late' | "+
+			"set noloadplugins | else | set loadplugins | endif",
 		"--cmd", "if empty($REVISA_AUTO_BUILD) | "+
 			"let g:revisa_auto_build = v:false | endif",
 		"-c", "lua vim.schedule(function() "+

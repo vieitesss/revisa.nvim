@@ -1,4 +1,23 @@
 local buf = H.open()
+if vim.env.REVISA_PLUGIN_LOAD == "late" then
+    H.equal(nil, vim.g.loaded_revisa)
+    vim.cmd.enew()
+    local unnamed = vim.api.nvim_get_current_buf()
+    local special = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_name(special, "special.txt")
+    local unloaded = vim.fn.bufadd("unloaded.txt")
+    local recorded = vim.api.nvim_create_buf(false, false)
+    vim.api.nvim_buf_set_name(recorded, "recorded.txt")
+    local saved = { name = "previous.txt", path = "preserved.txt" }
+    vim.b[recorded].revisa_file = saved
+    vim.cmd("runtime plugin/revisa.lua")
+    H.equal(nil, vim.b[unnamed].revisa_file)
+    H.equal(nil, vim.b[special].revisa_file)
+    H.equal(nil, vim.b[unloaded].revisa_file)
+    H.equal(saved, vim.b[recorded].revisa_file)
+    vim.api.nvim_set_current_buf(buf)
+    vim.cmd("Revisa refresh")
+end
 local absolute = vim.env.REVISA_ABSOLUTE
 local target = require("revisa.target")
 local buffer = require("revisa.buffer")
