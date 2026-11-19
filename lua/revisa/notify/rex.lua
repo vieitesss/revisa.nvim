@@ -16,9 +16,9 @@ local function session()
     return vim.env.REX_SESSION or ""
 end
 
--- M.run runs one rex command and returns its output, or nil and the
+-- run runs one rex command and returns its output, or nil and the
 -- message to show. The command and its arguments are one word each.
-function M.run(args)
+local function run(args)
     local command = { "rex" }
     vim.list_extend(command, args)
     return cli.exec(command, {}, "rex")
@@ -26,7 +26,7 @@ end
 
 -- decode runs one rex command and parses its JSON output.
 local function decode(args)
-    local output, why = M.run(args)
+    local output, why = run(args)
     if not output then
         return nil, why
     end
@@ -189,12 +189,12 @@ end
 -- M.deliver types the message into the block and presses Return, in the
 -- session that block belongs to.
 function M.deliver(recipient, message)
-    local _, why = M.run({ "send", "-s", recipient.session, "-b",
+    local _, why = run({ "send", "-s", recipient.session, "-b",
         recipient.id, message })
     if why then
         return why
     end
-    _, why = M.run({ "send-key", "-s", recipient.session, "-b",
+    _, why = run({ "send-key", "-s", recipient.session, "-b",
         recipient.id, "enter" })
     if why then
         return why

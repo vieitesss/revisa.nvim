@@ -36,11 +36,8 @@ end
 -- state names what recado reports about agent: busy while it works, idle
 -- when it waits, blank when it says something else.
 local function state(agent)
-    if agent.state == "busy" then
-        return "busy"
-    end
-    if agent.state == "idle" then
-        return "idle"
+    if agent.state == "busy" or agent.state == "idle" then
+        return agent.state
     end
     return nil
 end
@@ -83,12 +80,12 @@ function M.recipients()
     return recipients
 end
 
--- M.deliver carries the pointer to agent, one argument per word. Exit 2
--- means recado wants another agent, so the picker opens again.
-function M.deliver(agent, message, branch)
+-- M.deliver carries the pointer to recipient, one argument per word.
+-- Exit 2 means recado wants another agent, so the picker opens again.
+function M.deliver(recipient, message, branch)
     local ok, result = pcall(function()
         return vim.system({
-            "recado", "send", agent.id, message,
+            "recado", "send", recipient.id, message,
             "--meta", "revisa_branch=" .. branch,
         }, { env = { RECADO_ADDR = "revisa" } }):wait()
     end)

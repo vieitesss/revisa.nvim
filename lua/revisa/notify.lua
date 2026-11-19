@@ -181,10 +181,9 @@ local function labels(recipients)
     return labels
 end
 
--- collect returns the recipients of notifier name, ordered and
--- labelled for the picker.
-local function collect(name, worktree)
-    local notifier = require("revisa.notify." .. name)
+-- collect returns the notifier's recipients, ordered and labelled for
+-- the picker.
+local function collect(notifier, worktree)
     local found = notifier.recipients(worktree)
     if not found then
         return nil
@@ -261,36 +260,33 @@ local function offer(notifier, recipients, branch)
     end)
 end
 
--- chosen is the notifier to use: the setting when it names one, else rex
--- where it can work, else recado, else nil and what to install.
-local function chosen()
-    if settings.notify ~= "auto" then
-        return settings.notify, nil
+-- chooseNotifier returns an available notifier: the named setting, or
+-- rex then recado for auto. Each notifier owns its availability rules.
+local function chooseNotifier()
+    if settings.notify == "none" then
+        return nil, offHint
     end
-    if (vim.env.REX_SESSION or "") ~= ""
-        and vim.fn.executable("rex") == 1 then
-        return "rex", nil
+    if settings.notify == "auto" then
+        for _, name in ipairs({ "rex", "recado" }) do
+            local notifier = require("revisa.notify." .. name)
+            if notifier.available() then
+                return notifier
+            end
+        end
+        return nil, noNotifier
     end
-    if vim.fn.executable("recado") == 1 then
-        return "recado", nil
+    local notifier = require("revisa.notify." .. settings.notify)
+    local ready, why = notifier.available()
+    if not ready then
+        return nil, why
     end
-    return nil, noNotifier
+    return notifier
 end
 
 function M.send(request)
-    local name, why = chosen()
-    if not name then
+    local notifier, why = chooseNotifier()
+    if not notifier then
         cli.error(why)
-        return
-    end
-    if name == "none" then
-        cli.error(offHint)
-        return
-    end
-    local notifier = require("revisa.notify." .. name)
-    local ready, missing = notifier.available()
-    if not ready then
-        cli.error(missing)
         return
     end
     local found = target.of(api.nvim_get_current_buf())
@@ -312,15 +308,15 @@ function M.send(request)
         cli.error("revisa: " .. data.worktree .. " is not on a branch")
         return
     end
-    local found = collect(name, data.worktree)
-    if not found then
+    local recipients = collect(notifier, data.worktree)
+    if not recipients then
         return
     end
-    if #found == 0 then
+    if #recipients == 0 then
         cli.error("revisa: no recipient to notify")
         return
     end
-    offer(notifier, found, data.branch)
+    offer(notifier, recipients, data.branch)
 end
 
 return M
