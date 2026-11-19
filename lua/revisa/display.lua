@@ -20,7 +20,7 @@ end
 local function place(comment, where, moved)
     local now = moved[comment]
     if now and now.deleted then
-        return { kind = "hidden", why = "lines deleted" }
+        return { kind = "hidden" }
     end
     if now then
         comment = vim.tbl_extend("force", comment, now)

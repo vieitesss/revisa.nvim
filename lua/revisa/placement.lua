@@ -77,10 +77,6 @@ local function was_lines(comment, width)
     return out
 end
 
-local function hidden(why)
-    return { kind = "hidden", why = why }
-end
-
 local function anchored(comment, resolved, width)
     local placed = {
         kind = "anchored",
@@ -104,13 +100,13 @@ end
 -- sees another file's.
 function M.place(comment, target, line_count, with_resolved, width)
     if comment.side ~= target.side then
-        return hidden("another side")
+        return { kind = "hidden" }
     end
     if target.side == "old" and comment.commit ~= target.commit then
-        return hidden("another commit")
+        return { kind = "hidden" }
     end
     if comment.status == "resolved" and not with_resolved then
-        return hidden("resolved hidden")
+        return { kind = "hidden" }
     end
     if comment.condition == "outdated" then
         return {
@@ -121,7 +117,7 @@ function M.place(comment, target, line_count, with_resolved, width)
     end
     if type(comment.line_end) ~= "number" or comment.line_end > line_count
     then
-        return hidden("no current lines")
+        return { kind = "hidden" }
     end
     return anchored(comment, comment.status == "resolved", width)
 end
