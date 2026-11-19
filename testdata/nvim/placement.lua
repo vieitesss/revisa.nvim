@@ -1,9 +1,11 @@
--- The placement table: where one comment goes in one review target.
-local placement = require("revisa.placement")
+-- Comments are drawn only on their file version, with wrapped visible
+-- text. Private placement records and reason strings are not the contract.
+local api = vim.api
+local display = require("revisa.display")
+local buf = api.nvim_create_buf(false, true)
 
--- comment is an open new-side comment on a.txt, with fields changed.
 local function comment(fields)
-    local found = {
+    return vim.tbl_extend("force", {
         path = "a.txt",
         side = "new",
         status = "open",
@@ -11,144 +13,119 @@ local function comment(fields)
         line_end = 3,
         anchor_text = "local x = y",
         body = "Handle nil",
-    }
-    for key, value in pairs(fields) do
-        found[key] = value
-    end
-    return found
-end
-
--- withoutLines is a comment whose current lines are not known.
-local function withoutLines(found)
-    found.line_start, found.line_end = nil, nil
-    return found
+    }, fields or {})
 end
 
 local newSide = { kind = "file", path = "a.txt", side = "new" }
 local oldSide = {
     kind = "file", path = "a.txt", side = "old", commit = "base",
 }
-local changes = { kind = "changes", worktree = "/repo", branch = "feat/x" }
 
 local cases = {
+    { want = "open" },
+    { comment = { status = "resolved", reply = "Fixed" }, want = "hidden" },
     {
-        name = "new side, open",
-        want = {
-            kind = "anchored", sign = ">", group = "RevisaSign",
-            line_start = 2, line_end = 3,
-        },
-    },
-    {
-        name = "new side, resolved, hidden",
-        comment = comment({ status = "resolved", reply = "Fixed" }),
-        want = { kind = "hidden" },
-    },
-    {
-        name = "new side, resolved, shown",
-        comment = comment({ status = "resolved", reply = "Fixed" }),
+        comment = { status = "resolved", reply = "Fixed" },
         show = true,
-        want = {
-            kind = "anchored", sign = "✓", group = "RevisaResolved",
-        },
+        want = "resolved",
     },
+    { comment = { condition = "outdated" }, count = 2, want = "outdated" },
+    { comment = { line_end = 9 }, want = "hidden" },
+    { target = oldSide, want = "hidden" },
     {
-        name = "new side, outdated",
-        comment = withoutLines(comment({ condition = "outdated" })),
-        want = { kind = "marker", condition = "outdated" },
-    },
-    {
-        name = "new side, unknown",
-        comment = withoutLines(comment({ condition = "unknown" })),
-        want = { kind = "marker", condition = "unknown" },
-    },
-    {
-        name = "new side, outdated, stale range",
-        comment = comment({ condition = "outdated" }),
-        count = 2,
-        want = { kind = "marker", condition = "outdated" },
-    },
-    {
-        name = "new side, range past the end",
-        comment = comment({ line_end = 9 }),
-        want = { kind = "hidden", why = "no current lines" },
-    },
-    {
-        name = "new side comment, old side target",
+        comment = { side = "old", commit = "base" },
         target = oldSide,
-        want = { kind = "hidden", why = "another side" },
+        want = "open",
     },
     {
-        name = "old side, open, same commit",
-        comment = comment({ side = "old", commit = "base" }),
+        comment = { side = "old", commit = "head" },
         target = oldSide,
-        want = {
-            kind = "anchored", sign = ">", group = "RevisaSign",
-            line_start = 2, line_end = 3,
-        },
+        want = "hidden",
     },
-    {
-        name = "old side, open, other commit",
-        comment = comment({ side = "old", commit = "head" }),
-        target = oldSide,
-        want = { kind = "hidden", why = "another commit" },
-    },
-    {
-        name = "changes target",
-        target = changes,
-        want = { kind = "hidden", why = "not a file target" },
-    },
-    {
-        name = "another file",
-        comment = comment({ path = "b.txt" }),
-        want = { kind = "hidden", why = "another file" },
-    },
+    { target = { kind = "changes" }, want = "hidden" },
+    { comment = { path = "b.txt" }, want = "hidden" },
 }
 
 for _, case in ipairs(cases) do
-    local got = placement.place(case.comment or comment({}),
-        case.target or newSide, case.count or 5, case.show, 80)
-    for field, value in pairs(case.want) do
-        H.equal(value, got[field])
+    api.nvim_buf_set_lines(buf, 0, -1, false,
+        case.count == 2 and { "one", "two" }
+            or { "one", "two", "three", "four", "five" })
+    display.draw(buf, case.target or newSide, { comment(case.comment) },
+        case.show)
+    if case.want == "open" then
+        H.display(buf, 2, 3, { "Handle nil" })
+    elseif case.want == "resolved" then
+        H.resolved(buf, 2, 3, {
+            { "Handle nil", "RevisaComment" },
+            { "reply: Fixed", "RevisaReply" },
+        })
+    elseif case.want == "outdated" then
+        H.equal({}, H.signs(buf))
+        H.equal({
+            {
+                row = 2,
+                above = true,
+                lines = {
+                    { { "outdated (1)", "RevisaOutdated" } },
+                    { { "Handle nil", "RevisaComment" } },
+                    { { "was: local x = y", "RevisaWas" } },
+                },
+            },
+        }, H.virtual(buf))
+    else
+        H.equal({}, H.signs(buf))
+        H.equal({}, H.virtual(buf))
+        H.equal(nil, H.text(buf))
     end
 end
 
--- A marker carries the body and the anchor text it showed instead.
-local marker = placement.place(
-    withoutLines(comment({ condition = "outdated" })), newSide, 5, false,
-    80)
-H.equal({ { { "Handle nil", "RevisaComment" } } }, marker.body)
-H.equal({ { { "was: local x = y", "RevisaWas" } } }, marker.was)
-
--- Lines wrap at width: at the last space that fits, inside a word only
--- when the word alone is wider, keeping the leading indent.
-local wraps = {
-    { "", 20, { "" } },
-    { "short", 20, { "short" } },
-    { "aaaa bbbb cccc dddd eeee", 10, { "aaaa bbbb", "cccc dddd", "eeee" } },
-    { "    local x = f(a, b)", 14, { "    local x =", "f(a, b)" } },
-    { "abcdefghijklmnopqrstuvwxyz", 10,
-        { "abcdefghij", "klmnopqrst", "uvwxyz" } },
-    { "one  two   three", 5, { "one", "two", "three" } },
-    { "ñandú ñandú", 6, { "ñandú", "ñandú" } },
-}
-for _, case in ipairs(wraps) do
-    H.equal(case[3], placement.wrap(case[1], case[2]))
+-- Inspect the drawn text in a 20-cell window, not the wrapping helper.
+api.nvim_buf_set_lines(buf, 0, -1, false, { "one", "two", "three" })
+local win = api.nvim_open_win(buf, true, {
+    relative = "editor", row = 0, col = 0, width = 20, height = 6,
+    style = "minimal",
+})
+vim.wo[win].signcolumn = "no"
+for _, case in ipairs({
+    { "before\n\nafter", { "before", "", "after" } },
+    { "short", { "short" } },
+    { "aaaa bbbb cccc dddd eeee", { "aaaa bbbb cccc dddd", "eeee" } },
+    { "    local value = f(a, b)", { "    local value =", "f(a, b)" } },
+    { "abcdefghijklmnopqrstuvwxyz", { "abcdefghijklmnopqrst", "uvwxyz" } },
+    { "one  two   three  four five", { "one  two   three", "four five" } },
+    { "ñandú ñandú ñandú ñandú", { "ñandú ñandú ñandú", "ñandú" } },
+}) do
+    display.draw(buf, newSide, { comment({ body = case[1] }) }, false)
+    H.display(buf, 2, 3, case[2])
 end
 
--- The body, the reply and the was: lines all wrap; the prefix counts.
-local long = placement.place(withoutLines(comment({
+-- Prefixes count toward the width of replies and was: lines.
+display.draw(buf, newSide, { comment({
+    status = "resolved",
+    body = "first second third fourth fifth",
+    reply = "done here with more details",
+}) }, true)
+H.resolved(buf, 2, 3, {
+    { "first second third", "RevisaComment" },
+    { "fourth fifth", "RevisaComment" },
+    { "reply: done here", "RevisaReply" },
+    { "with more details", "RevisaReply" },
+})
+display.draw(buf, newSide, { comment({
     condition = "outdated",
-    body = "first second third",
-    reply = "done here",
-    anchor_text = "local x = y",
-})), newSide, 5, false, 12)
+    body = "Gone line",
+    anchor_text = "local value = something",
+}) }, false)
 H.equal({
-    { { "first second", "RevisaComment" } },
-    { { "third", "RevisaComment" } },
-    { { "reply: done", "RevisaReply" } },
-    { { "here", "RevisaReply" } },
-}, long.body)
-H.equal({
-    { { "was: local x", "RevisaWas" } },
-    { { "= y", "RevisaWas" } },
-}, long.was)
+    {
+        row = 3,
+        above = true,
+        lines = {
+            { { "outdated (1)", "RevisaOutdated" } },
+            { { "Gone line", "RevisaComment" } },
+            { { "was: local value =", "RevisaWas" } },
+            { { "something", "RevisaWas" } },
+        },
+    },
+}, H.virtual(buf))
+api.nvim_win_close(win, true)

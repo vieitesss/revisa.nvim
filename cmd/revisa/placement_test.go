@@ -4,10 +4,9 @@ import (
 	"testing"
 )
 
-// TestBufferPlacementTable pins where one comment goes in each review
-// target: anchored on its lines, hidden, or in the end block. The rules
-// alone decide it, so no repo and no binary are involved.
-func TestBufferPlacementTable(t *testing.T) {
+// TestBufferCommentPlacementAndWrapping checks the signs and text drawn
+// for each file version, without depending on private placement records.
+func TestBufferCommentPlacementAndWrapping(t *testing.T) {
 	headless(t, t.TempDir(), "placement.lua")
 }
 
