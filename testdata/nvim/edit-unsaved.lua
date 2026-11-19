@@ -1,0 +1,14 @@
+-- Saving the comment editor refuses when the file buffer changed while
+-- the editor was open, and keeps the editor for a retry or a cancel.
+local api = vim.api
+local messages = H.notifications()
+local buf = H.open()
+api.nvim_win_set_cursor(0, { 2, 0 })
+vim.cmd("Revisa edit")
+local editor = H.float()
+api.nvim_buf_set_lines(editor, 0, -1, false, { "Edited body" })
+api.nvim_buf_set_lines(buf, 0, 0, false, { "unsaved" })
+vim.cmd("write")
+H.error(messages, "save the buffer before editing")
+H.equal(editor, api.nvim_get_current_buf())
+H.equal({ "Edited body" }, api.nvim_buf_get_lines(editor, 0, -1, false))

@@ -18,6 +18,25 @@ local function width(buf)
     return math.max(20, cells)
 end
 
+-- place is where one comment is drawn at: its own lines, else the lines
+-- its signs have moved to since.
+local function place(comment, where, moved)
+    local placed = placement.place(comment, where.target, where.count,
+        where.show_resolved, where.cells)
+    local now = moved[comment]
+    if now and placed.kind == "anchored" then
+        placed.line_start, placed.line_end = now.line_start, now.line_end
+    end
+    return placed
+end
+
+-- waiting reports whether win keeps its sign column hidden until a sign
+-- shows, which 'signcolumn' auto and auto:N do.
+local function waiting(win)
+    local column = api.nvim_get_option_value("signcolumn", { win = win })
+    return column == "auto" or column:sub(1, 5) == "auto:"
+end
+
 -- buffers lists the loaded buffers this feature has drawn comments into.
 function M.buffers()
     local bufs = {}
@@ -38,15 +57,24 @@ local groups = {
     { condition = "unknown", group = "RevisaUnknown" },
 }
 
--- anchored draws a comment on its lines: a sign on each, the body below.
-local function anchored(buf, placed)
+-- signs marks the lines of an anchored comment. It returns the extmarks
+-- of the first and last signs, so a later redraw can read the lines they
+-- moved to.
+local function signs(buf, placed)
+    local first, last
     for line = placed.line_start, placed.line_end do
-        api.nvim_buf_set_extmark(buf, namespace, line - 1, 0, {
+        last = api.nvim_buf_set_extmark(buf, namespace, line - 1, 0, {
             sign_text = placed.sign,
             sign_hl_group = placed.group,
         })
+        first = first or last
     end
-    -- Leave room for padding below the anchor, even on empty lines.
+    return first, last
+end
+
+-- body draws a comment below the last of its lines. Leaving room for
+-- padding below the anchor works even on empty lines.
+local function body(buf, placed)
     api.nvim_buf_set_extmark(buf, namespace, placed.line_end, 0, {
         virt_lines = placed.body,
         virt_lines_above = true,
@@ -103,25 +131,59 @@ end
 -- draw shows the comments of the file version target names. A comment
 -- with no current lines is drawn in one block below the last line, not on
 -- a guessed line.
-function M.draw(buf, target, comments, show_resolved)
+function M.draw(buf, target, comments, show_resolved, moved)
     api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
     if not target or target.kind ~= "file" then
         drawn[buf] = nil
         return
     end
+    local count = api.nvim_buf_line_count(buf)
+    moved = moved or {}
+    local where = {
+        target = target, count = count, show_resolved = show_resolved,
+        cells = width(buf),
+    }
+    -- The signs come first: they widen the gutter when 'signcolumn' is
+    -- auto, so the cells a body may take are measured once they are there.
+    local placed = {}
+    local anchors = {}
+    for _, comment in ipairs(comments) do
+        local one = place(comment, where, moved)
+        placed[#placed + 1] = one
+        if one.kind == "anchored" then
+            local first, last = signs(buf, one)
+            anchors[#anchors + 1] = {
+                comment = comment, first = first, last = last,
+            }
+        end
+    end
     drawn[buf] = {
         target = target, comments = comments, show_resolved = show_resolved,
+        anchors = anchors,
     }
-    local count = api.nvim_buf_line_count(buf)
-    local cells = width(buf)
+    -- A sign column that 'signcolumn' keeps hidden until a sign shows is
+    -- laid out on the next redraw, so the bodies are wrapped after it.
+    for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+        if waiting(win) then
+            vim.cmd.redraw()
+            break
+        end
+    end
+    local room = width(buf)
+    if room ~= where.cells then
+        where.cells = room
+        for index, one in ipairs(placed) do
+            if one.kind ~= "hidden" then
+                placed[index] = place(comments[index], where, moved)
+            end
+        end
+    end
     local markers = {}
-    for _, comment in ipairs(comments) do
-        local placed = placement.place(comment, target, count, show_resolved,
-            cells)
-        if placed.kind == "anchored" then
-            anchored(buf, placed)
-        elseif placed.kind == "marker" then
-            markers[#markers + 1] = placed
+    for _, one in ipairs(placed) do
+        if one.kind == "anchored" then
+            body(buf, one)
+        elseif one.kind == "marker" then
+            markers[#markers + 1] = one
         end
     end
     local lines, counts = block(markers)
@@ -140,12 +202,32 @@ function M.draw(buf, target, comments, show_resolved)
     })
 end
 
+-- moved is the lines each comment is on now, read from its signs before
+-- a draw clears them: a line inserted above moves the comment, and a
+-- redraw must keep it there rather than in the CLI's last coordinates.
+local function moved(buf, anchors)
+    local rows = {}
+    for _, anchor in ipairs(anchors) do
+        local first = api.nvim_buf_get_extmark_by_id(buf, namespace,
+            anchor.first, {})
+        local last = api.nvim_buf_get_extmark_by_id(buf, namespace,
+            anchor.last, {})
+        if #first == 2 and #last == 2 then
+            rows[anchor.comment] = {
+                line_start = first[1] + 1, line_end = last[1] + 1,
+            }
+        end
+    end
+    return rows
+end
+
 -- redraw draws every loaded buffer again from its last draw, for a window
 -- size change.
 function M.redraw()
     for _, buf in ipairs(M.buffers()) do
         local last = drawn[buf]
-        M.draw(buf, last.target, last.comments, last.show_resolved)
+        M.draw(buf, last.target, last.comments, last.show_resolved,
+            moved(buf, last.anchors))
     end
 end
 

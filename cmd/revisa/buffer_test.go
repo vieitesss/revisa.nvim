@@ -415,6 +415,28 @@ func TestBufferCommentsWrapToWindow(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
 }
 
+// TestBufferRewrapKeepsCommentsOnTheirLines pins the resize redraw to the
+// lines the extmarks moved to, not the lines the CLI last reported.
+func TestBufferRewrapKeepsCommentsOnTheirLines(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "2",
+		"--body", "Shifted")
+	headless(t, p.worktrees[0], "moved-redraw.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+}
+
+// TestBufferCommentWrapsInsideSignColumn pins the wrap width to the text
+// width the window has once the comment signs widen the gutter.
+func TestBufferCommentWrapsInsideSignColumn(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "2",
+		"--body", strings.Repeat("a", 78)+"XY"+strings.Repeat("z", 40))
+	headless(t, p.worktrees[0], "signcolumn.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+}
+
 func TestBufferCommentOnRangeReservesSpace(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
