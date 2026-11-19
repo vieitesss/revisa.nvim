@@ -1,6 +1,8 @@
 package main_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -39,8 +41,6 @@ func TestAddErrors(t *testing.T) {
 			"--lines must be N or N-M", 2},
 		{"not a number", append(file, "--lines", "a"),
 			"--lines must be N or N-M", 2},
-		{"absolute path", []string{"--path", "/etc/hosts",
-			"--lines", "1", "--body", "b"}, "relative to the repo root", 2},
 		{"escaping path", []string{"--path", "../x",
 			"--lines", "1", "--body", "b"}, "relative to the repo root", 2},
 		{"bad side", append(file, "--lines", "1",
@@ -62,5 +62,59 @@ func TestAddErrors(t *testing.T) {
 	}
 	if got := listJSON(t, linked); len(got) != 0 {
 		t.Errorf("failed adds stored %d comments", len(got))
+	}
+}
+
+func TestAddMapsAnAbsolutePathToTheProjectRoot(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	addOK(t, linked, "--path", filepath.Join(linked, "src/a.lua"),
+		"--lines", "2", "--body", "Absolute")
+	got := listJSON(t, linked)
+	if len(got) != 1 {
+		t.Fatalf("want 1 comment, got %v", got)
+	}
+	for field, want := range map[string]any{
+		"path": "src/a.lua", "side": "new", "anchor_text": "local x = y",
+		"body": "Absolute",
+	} {
+		if got[0][field] != want {
+			t.Errorf("%s: got %#v, want %#v", field, got[0][field], want)
+		}
+	}
+}
+
+func TestAddAcceptsAnAbsolutePathToAGoneFileOnTheOldSide(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	if err := os.Remove(filepath.Join(linked, "src/a.lua")); err != nil {
+		t.Fatal(err)
+	}
+	id := addOK(t, linked, "--path", filepath.Join(linked, "src/a.lua"),
+		"--lines", "2", "--side", "old", "--commit", "HEAD",
+		"--body", "Gone from the worktree")
+	got := listJSON(t, linked)
+	if len(got) != 1 || got[0]["id"] != id {
+		t.Fatalf("want the added comment, got %v", got)
+	}
+	for field, want := range map[string]any{
+		"path": "src/a.lua", "side": "old", "anchor_text": "local b = 2",
+	} {
+		if got[0][field] != want {
+			t.Errorf("%s: got %#v, want %#v", field, got[0][field], want)
+		}
+	}
+}
+
+func TestAddAndListRefuseAPathOutsideTheProject(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	outside := filepath.Join(t.TempDir(), "notes.txt")
+	writeFile(t, filepath.Dir(outside), "notes.txt", "one\n")
+	fails(t, linked, "is outside the project", 1, "add",
+		"--path", outside, "--lines", "1", "--body", "b")
+	fails(t, linked, "is outside the project", 1, "list", "--file", outside)
+	if got := listJSON(t, linked); len(got) != 0 {
+		t.Errorf("failed add stored %v", got)
 	}
 }

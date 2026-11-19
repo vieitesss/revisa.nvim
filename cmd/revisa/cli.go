@@ -244,7 +244,8 @@ func writePlain(w io.Writer, l listed) {
 func add(args []string, stdout, stderr io.Writer) error {
 	fl := flag.NewFlagSet("add", flag.ContinueOnError)
 	fl.SetOutput(stderr)
-	path := fl.String("path", "", "file path relative to the repo root")
+	path := fl.String("path", "",
+		"file path, absolute or relative to the repo root")
 	lineRange := fl.String("lines", "", "line or range, as 12 or 12-14")
 	body := fl.String("body", "", "the comment")
 	side := fl.String("side", "new", "new or old")
@@ -263,11 +264,11 @@ func add(args []string, stdout, stderr io.Writer) error {
 	if *path == "" || *lineRange == "" || strings.TrimSpace(*body) == "" {
 		return usageError("add: --path, --lines and --body are required")
 	}
-	if !filepath.IsLocal(*path) {
+	if !filepath.IsAbs(*path) && !filepath.IsLocal(*path) {
 		return usageError(fmt.Sprintf(
-			"add: --path must be relative to the repo root, got %q", *path))
+			"add: --path must be absolute or relative to the repo root,"+
+				" got %q", *path))
 	}
-	*path = filepath.ToSlash(filepath.Clean(*path))
 	start, end, err := parseLines(*lineRange)
 	if err != nil {
 		return err
@@ -295,8 +296,12 @@ func add(args []string, stdout, stderr io.Writer) error {
 		return usageError(fmt.Sprintf(
 			"add: --side must be new or old, got %q", *side))
 	}
+	rel, err := p.Relative(*path)
+	if err != nil {
+		return fmt.Errorf("add: %w", err)
+	}
 	c, err := p.Add(project.Draft{
-		Path:   *path,
+		Path:   rel,
 		Start:  start,
 		End:    end,
 		Body:   *body,
@@ -306,7 +311,7 @@ func add(args []string, stdout, stderr io.Writer) error {
 	})
 	if pastEnd, ok := errors.AsType[project.LinesPastEndError](err); ok {
 		return fmt.Errorf("add: lines %s are past the end of %s (%d lines)",
-			*lineRange, *path, pastEnd.LineCount)
+			*lineRange, rel, pastEnd.LineCount)
 	}
 	if err != nil {
 		return err
