@@ -1,6 +1,6 @@
 local buf = H.open()
 local found = require("revisa.display").refresh(buf)
-H.equal(vim.api.nvim_buf_get_name(buf), found.absolute)
+H.equal(vim.env.REVISA_FILE, found.absolute)
 H.display(buf, 1, 1, { "Existing alias comment" })
 
 vim.cmd("2Revisa comment")

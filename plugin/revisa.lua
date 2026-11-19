@@ -65,6 +65,13 @@ vim.keymap.set("n", "<Plug>(revisa-edit)", function()
 end)
 
 local group = api.nvim_create_augroup("revisa", { clear = true })
+api.nvim_create_autocmd({ "BufReadPre", "BufNewFile", "BufFilePost" }, {
+    group = group,
+    callback = function(event)
+        require("revisa.buffer").remember(event.buf)
+    end,
+})
+
 api.nvim_create_autocmd("BufReadPost", {
     group = group,
     callback = function(event)
