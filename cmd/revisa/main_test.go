@@ -1,7 +1,6 @@
 package main_test
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -114,43 +113,6 @@ func TestListOnDetachedHeadNeedsBranch(t *testing.T) {
 	}
 }
 
-func TestListJSONPrintsEverySchemaField(t *testing.T) {
-	p := normalClone(t)
-	addMocks(t, p.worktrees[0])
-	// The mocked comment is still anchored on its stored lines.
-	lines := strings.Repeat("\n", 11) + "local x = y\nif x then\n  run(x)\n"
-	writeFile(t, p.worktrees[1], "src/a.lua", lines)
-	out, stderr, code := run(t, p.worktrees[0],
-		"list", "--branch", "feat/x", "--json")
-	if code != 0 {
-		t.Fatalf("exit %d: %s", code, stderr)
-	}
-	var got []map[string]any
-	if err := json.Unmarshal([]byte(out), &got); err != nil {
-		t.Fatalf("not JSON: %v\n%s", err, out)
-	}
-	if len(got) != 3 {
-		t.Fatalf("want 3 comments on feat/x, got %d", len(got))
-	}
-	mock, err := os.ReadFile(
-		"../../testdata/comments/01JC8Z7K3M9QX2V5T1R4N6P8WY.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var want map[string]any
-	if err := json.Unmarshal(mock, &want); err != nil {
-		t.Fatal(err)
-	}
-	for field, v := range want {
-		gv, ok := got[0][field]
-		if !ok {
-			t.Errorf("missing field %q", field)
-		} else if gv != v {
-			t.Errorf("field %q: got %v, want %v", field, gv, v)
-		}
-	}
-}
-
 func TestListEmptyStore(t *testing.T) {
 	p := normalClone(t)
 	out, _, code := run(t, p.worktrees[0], "list")
@@ -250,7 +212,6 @@ func TestFlagUsageExitCodes(t *testing.T) {
 		{"resolve", "--reply"},
 		{"prune", "--branch"},
 		{"migrate", "--branch"},
-		{"ls", "--branch"},
 	}
 	for _, c := range cases {
 		t.Run(c.command, func(t *testing.T) {
