@@ -11,8 +11,6 @@ import (
 const committedLua = "local a = 1\nlocal b = 2\nlocal c = 3\n"
 const editedLua = "local a = 1\nlocal x = y\nif x then\n  run(x)\nend\n"
 
-// reviewProject is a normal clone whose feat/x worktree committed
-// src/a.lua and then edited it without committing.
 func reviewProject(t *testing.T) (p project, commit string) {
 	t.Helper()
 	p = normalClone(t)
@@ -139,7 +137,7 @@ func TestAddOldSidePathIsFromRepoRoot(t *testing.T) {
 	}
 }
 
-func TestAddIDsAreUniqueAndOrdered(t *testing.T) {
+func TestAddListsUniqueIDsInLexicalOrder(t *testing.T) {
 	p, _ := reviewProject(t)
 	var ids []string
 	for range 3 {
@@ -150,7 +148,6 @@ func TestAddIDsAreUniqueAndOrdered(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("want 3 comments, got %d", len(got))
 	}
-	// IDs generated in the same millisecond have random ordering.
 	slices.Sort(ids)
 	for i, c := range got {
 		if len(ids[i]) != 26 || c["id"] != ids[i] {
@@ -245,8 +242,6 @@ func TestReposWhosePathsDifferByTrailingSpaceKeepSeparateStores(
 	}
 }
 
-// TestAddOldSideOnDeletedLine covers #9 at the CLI seam: a line only the
-// base has stores the old side, the path and that commit.
 func TestAddOldSideOnDeletedLine(t *testing.T) {
 	_, linked := changesProject(t)
 	base := git(t, linked, "merge-base", "main", "HEAD")
@@ -268,8 +263,6 @@ func TestAddOldSideOnDeletedLine(t *testing.T) {
 	}
 }
 
-// TestAddOldSideOnRenamedFileStoresOldPath covers #9: after a rename the
-// base has only the old path, so that is the path the comment stores.
 func TestAddOldSideOnRenamedFileStoresOldPath(t *testing.T) {
 	_, linked := changesProject(t)
 	base := git(t, linked, "merge-base", "main", "HEAD")

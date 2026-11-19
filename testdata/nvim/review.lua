@@ -28,7 +28,6 @@ local function expected()
     }
 end
 
--- check_buffer asserts the changes buffer of the current window.
 local function check_buffer()
     local buf = api.nvim_get_current_buf()
     H.equal("revisa://changes/feat/x", api.nvim_buf_get_name(buf))
@@ -38,7 +37,6 @@ local function check_buffer()
     return buf
 end
 
--- check_list reviews one worktree and checks the changes buffer.
 local function check_list(request)
     local origin = api.nvim_get_current_win()
     require("revisa").review(request)
@@ -79,14 +77,9 @@ elseif case == "open" then
         end
     end
 elseif case == "outside" then
-    -- The working directory is in no git repository, so only the
-    -- explicit worktree decides where the CLI runs.
     H.equal("", api.nvim_buf_get_name(0))
     check_list(vim.env.REVISA_TARGET)
 elseif case == "startup" then
-    -- The shell command leaves its worktree in the environment. One
-    -- :Revisa review consumes it: the next one opens the picker instead
-    -- of reopening that worktree, and no nested Neovim inherits it.
     H.open()
     local origin = api.nvim_get_current_win()
     vim.cmd("Revisa review")

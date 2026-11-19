@@ -9,8 +9,6 @@ import (
 	"testing"
 )
 
-// goStub is a fake go on PATH. Its build writes a fake bin/revisa whose
-// install only logs, so the tests never compile or touch $HOME.
 const goStub = `#!/bin/sh
 echo "$@" >> "$REVISA_GO_LOG"
 if [ -n "$REVISA_GO_SLEEP" ]; then sleep "$REVISA_GO_SLEEP"; fi
@@ -20,17 +18,12 @@ printf '#!/bin/sh\necho "$@" >> "$REVISA_INSTALL_LOG"\n' > bin/revisa
 chmod +x bin/revisa
 `
 
-// delayedGitStub is a fake git on PATH. With REVISA_GIT_SLEEP set it
-// answers the plugin's startup check only after a delay, so a test can run
-// a command before the check returns; otherwise it runs the real git.
 const delayedGitStub = `#!/bin/sh
 if [ -z "$REVISA_GIT_SLEEP" ]; then exec "$REVISA_GIT" "$@"; fi
 sleep "$REVISA_GIT_SLEEP"
 printf '%s\n%s\n' "$REVISA_GIT_ROOT" "$REVISA_GIT_REV"
 `
 
-// buildPlugin is a copy of the plugin in its own git checkout, with a
-// fake go first on PATH.
 type buildPlugin struct {
 	root, goLog, installLog string
 	env                     []string
@@ -118,9 +111,7 @@ func TestAutoBuildBuildsAndInstallsWhenTheCommitIsNew(t *testing.T) {
 
 func TestAutoBuildIsOffWhenTheUserTurnsItOff(t *testing.T) {
 	p := newBuildPlugin(t)
-	env := append(p.env, "REVISA_CASE=idle")
-	// The harness turns the build off unless REVISA_AUTO_BUILD is set.
-	env = append(env, "REVISA_AUTO_BUILD=")
+	env := append(p.env, "REVISA_CASE=idle", "REVISA_AUTO_BUILD=")
 	headless(t, t.TempDir(), "build.lua", env...)
 	if got := logLines(t, p.goLog); got != nil {
 		t.Errorf("go ran %q with the build turned off", got)

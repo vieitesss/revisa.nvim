@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// TestBufferCommentsUseTheDisplayedFileVersion checks saved comments,
-// not the private target tables used to choose their branch and path.
 func TestBufferCommentsUseTheDisplayedFileVersion(t *testing.T) {
 	p, linked := changesProject(t)
 	main := p.worktrees[0]
@@ -50,9 +48,6 @@ func TestBufferCommentsUseTheDisplayedFileVersion(t *testing.T) {
 	}
 }
 
-// TestBufferOldSideKeepsTheReviewedBranch pins #9: a comment on the old
-// side of a review belongs to the branch under review, not to the branch
-// the reviewer's own worktree has checked out.
 func TestBufferOldSideKeepsTheReviewedBranch(t *testing.T) {
 	p, linked := changesProject(t)
 	base := git(t, linked, "merge-base", "main", "HEAD")
@@ -77,9 +72,6 @@ func TestBufferOldSideKeepsTheReviewedBranch(t *testing.T) {
 	}
 }
 
-// TestBufferReviewKeepsTwoDetachedWorktreesApart names a detached changes
-// buffer after its head and worktree, so two detached worktrees at
-// different heads and an equal basename do not delete each other's buffer.
 func TestBufferReviewKeepsTwoDetachedWorktreesApart(t *testing.T) {
 	p, _ := changesProject(t)
 	main := p.worktrees[0]
@@ -99,10 +91,6 @@ func TestBufferReviewKeepsTwoDetachedWorktreesApart(t *testing.T) {
 		"REVISA_NAMES="+jsonLines(t, names))
 }
 
-// TestBufferRenamedDiffBufferCommentsOnItsNewName covers a :saveas on the
-// new side of a diff: the pin names the path the diff read, so it stops
-// applying once the buffer has another name, and the comment lands on the
-// file the reviewer sees.
 func TestBufferRenamedDiffBufferCommentsOnItsNewName(t *testing.T) {
 	_, linked := changesProject(t)
 	headless(t, linked, "rename.lua",

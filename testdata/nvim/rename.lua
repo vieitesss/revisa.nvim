@@ -1,9 +1,6 @@
 local api = vim.api
 local worktree = vim.env.REVISA_LINKED
 
--- The new side of a diff is the real file, so :saveas renames it. The
--- target must stop naming the path the diff read and follow the buffer,
--- so a comment made there is stored against the name the reviewer sees.
 require("revisa.diff").open({
     worktree = worktree,
     branch = "feat/x",

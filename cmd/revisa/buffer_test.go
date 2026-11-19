@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-// headless runs the real plugin and binary without a user configuration.
 func headless(t *testing.T, dir, script string, env ...string) {
 	t.Helper()
 	root, err := filepath.Abs("../..")
@@ -44,8 +43,6 @@ func headless(t *testing.T, dir, script string, env ...string) {
 	}
 }
 
-// copyPlugin copies the plugin's Lua code into a new directory, so a test
-// can give it its own bin/ without touching the checkout.
 func copyPlugin(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -251,9 +248,6 @@ func TestBufferFloatSpaceInScrolledAndDiffWindows(t *testing.T) {
 	}
 }
 
-// TestBufferRefusesNonFilesAndModifiedBuffers covers #9 for another
-// tool's old-side buffer: it names the scheme in a clear error and
-// stores nothing.
 func TestBufferRefusesNonFilesAndModifiedBuffers(t *testing.T) {
 	cases := map[string]string{
 		"patch": "revisa: comments require a real file buffer",
@@ -311,8 +305,6 @@ func TestBufferExplicitRefreshAndNoBufEnterRefresh(t *testing.T) {
 		"REVISA_WORKTREE="+linked)
 }
 
-// TestBufferCLIReportsOneJSONError checks that malformed CLI output is
-// reported once per command, without replacing the file or its comments.
 func TestBufferCLIReportsOneJSONError(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
@@ -330,8 +322,6 @@ func TestBufferCLIReportsOneJSONError(t *testing.T) {
 		"REVISA_STUBS="+stubs)
 }
 
-// TestBufferProcessFailuresReadTheSame checks command notifications:
-// stderr wins over the fallback "<what> failed (exit N)" message.
 func TestBufferProcessFailuresReadTheSame(t *testing.T) {
 	for _, kind := range []string{"silent", "stderr"} {
 		t.Run(kind, func(t *testing.T) {
@@ -423,8 +413,6 @@ func TestBufferOpenCommentsAppearOnRead(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
 }
 
-// TestBufferCommentsWrapToWindow pins the wrap width: the window's text
-// width kept between 20 and 80, and updated when the window resizes.
 func TestBufferCommentsWrapToWindow(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
@@ -434,8 +422,6 @@ func TestBufferCommentsWrapToWindow(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
 }
 
-// TestBufferRewrapKeepsCommentsOnTheirLines pins the resize redraw to the
-// lines the extmarks moved to, not the lines the CLI last reported.
 func TestBufferRewrapKeepsCommentsOnTheirLines(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
@@ -445,9 +431,6 @@ func TestBufferRewrapKeepsCommentsOnTheirLines(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
 }
 
-// TestBufferRewrapKeepsCommentWhenLinesAboveAreDeleted pins the redraw to
-// the lines the signs moved to, even when the CLI's coordinates are past
-// the end of the shrunken buffer.
 func TestBufferRewrapKeepsCommentWhenLinesAboveAreDeleted(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
@@ -457,9 +440,6 @@ func TestBufferRewrapKeepsCommentWhenLinesAboveAreDeleted(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
 }
 
-// TestBufferRewrapHidesCommentWhoseLinesWereDeleted pins a redraw to hide
-// a comment whose anchor is gone, rather than drawing past the end of the
-// buffer or guessing a line for it.
 func TestBufferRewrapHidesCommentWhoseLinesWereDeleted(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
@@ -469,8 +449,6 @@ func TestBufferRewrapHidesCommentWhoseLinesWereDeleted(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
 }
 
-// TestBufferCommentWrapsInsideSignColumn pins the wrap width to the text
-// width the window has once the comment signs widen the gutter.
 func TestBufferCommentWrapsInsideSignColumn(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
@@ -522,9 +500,6 @@ func TestBufferCommentOnLine(t *testing.T) {
 	}
 }
 
-// TestBufferOutdatedCommentsDrawEndBlock covers #12: a comment whose
-// anchor text is gone is drawn in one block below the last line, with its
-// body and was: lines, and never as a sign on the stored line.
 func TestBufferOutdatedCommentsDrawEndBlock(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
@@ -537,8 +512,6 @@ func TestBufferOutdatedCommentsDrawEndBlock(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
 }
 
-// TestBufferCommentFollowsLinesInsertedAbove covers #12: lines inserted
-// above a comment move its sign to the lines its anchor text is on now.
 func TestBufferCommentFollowsLinesInsertedAbove(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
@@ -548,9 +521,6 @@ func TestBufferCommentFollowsLinesInsertedAbove(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
 }
 
-// TestBufferCommentReturnsWhenAnchorTextComesBack covers #12: an outdated
-// comment returns to its line, and the block disappears, once the anchor
-// text is in the file again.
 func TestBufferCommentReturnsWhenAnchorTextComesBack(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]

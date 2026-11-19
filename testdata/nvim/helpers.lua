@@ -151,7 +151,6 @@ function H.float()
     error("comment float not found")
 end
 
--- H.signs returns one entry per sign: its 1-based line, text and group.
 function H.signs(buf)
     local signs = {}
     for _, mark in ipairs(H.marks(buf)) do
@@ -170,8 +169,6 @@ function H.signs(buf)
     return signs
 end
 
--- H.virtual returns each block of virtual lines: its 0-based row, whether
--- it is above that row, and its chunks.
 function H.virtual(buf)
     local blocks = {}
     for _, mark in ipairs(H.marks(buf)) do
@@ -187,7 +184,6 @@ function H.virtual(buf)
     return blocks
 end
 
--- H.text returns the right-aligned virtual text, or nil.
 function H.text(buf)
     for _, mark in ipairs(H.marks(buf)) do
         local details = mark[4]
@@ -198,8 +194,6 @@ function H.text(buf)
     end
 end
 
--- H.screen returns the rendered rows of the screen, trailing blanks
--- trimmed. Set 'lines' and 'columns' before drawing so every row fits.
 function H.screen()
     vim.cmd.redraw()
     local rows = {}
@@ -213,7 +207,6 @@ function H.screen()
     return rows
 end
 
--- H.row returns the first screen row that holds text, or nil.
 function H.row(rows, text)
     for row, line in ipairs(rows) do
         if line:find(text, 1, true) then

@@ -1,9 +1,5 @@
 local api = vim.api
 
--- A comment on the old side of a review belongs to the branch under
--- review, not to the branch the old side is read at or the one the
--- reviewer's worktree has checked out.
-
 local function find(buf, text)
     for line, current in ipairs(api.nvim_buf_get_lines(buf, 0, -1, false)) do
         if current == text then

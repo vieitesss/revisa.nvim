@@ -1,5 +1,3 @@
--- Saving the comment editor refuses when the file buffer changed while
--- the editor was open, and keeps the editor for a retry or a cancel.
 local api = vim.api
 local messages = H.notifications()
 local buf = H.open()

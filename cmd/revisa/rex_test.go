@@ -10,11 +10,6 @@ import (
 	"testing"
 )
 
-// rexStubScript stands in for rex. It records the argv of every call in
-// call<N>, counts them in count, and then answers by command: "block ls"
-// prints blocks.json, "block call ... process" prints the block's
-// process-<id>.json, and "capture" prints capture-<id>.txt. Only shell
-// builtins are used, so a test PATH can leave out the real rex.
 const rexStubScript = `#!/bin/sh
 dir=${REX_STUB:?}
 n=0
@@ -59,16 +54,12 @@ fi
 exit 0
 `
 
-// stubBlock is one pane of a stub rex session. Cwd is where its process
-// works; the block listing itself carries no directory.
 type stubBlock struct {
 	ID    string
 	Label string
 	Cwd   string
 }
 
-// blocksJSON is what the stub rex prints for "block ls --json", in the
-// shape the real rex prints.
 func blocksJSON(t *testing.T, blocks ...stubBlock) string {
 	t.Helper()
 	entries := []map[string]string{}
@@ -90,8 +81,6 @@ func blocksJSON(t *testing.T, blocks ...stubBlock) string {
 	return string(data)
 }
 
-// processJSON is what the stub rex prints for a block's "process" call,
-// in the shape the real rex prints, with only cwd filled in.
 func processJSON(t *testing.T, cwd string) string {
 	t.Helper()
 	process := map[string]any{"pid": 1, "user_id": 501, "name": "zsh"}
@@ -110,8 +99,6 @@ func processJSON(t *testing.T, cwd string) string {
 	return string(data)
 }
 
-// rexStub writes the stub into a directory of its own, so it shadows
-// any rex installed on the machine.
 func rexStub(t *testing.T, blocks string, panes ...stubBlock) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -128,8 +115,6 @@ func rexStub(t *testing.T, blocks string, panes ...stubBlock) string {
 	return dir
 }
 
-// rexPath is the test PATH: the stub first, then the plugin's binary and
-// git. With no stub, nothing named rex is reachable.
 func rexPath(t *testing.T, stub string) string {
 	t.Helper()
 	gitBinary, err := exec.LookPath("git")
@@ -144,8 +129,6 @@ func rexPath(t *testing.T, stub string) string {
 	return strings.Join(parts, string(os.PathListSeparator))
 }
 
-// rexDelivery returns the capture and typing commands, leaving out pane
-// discovery so its queries do not affect assertions about delivery.
 func rexDelivery(t *testing.T, stub string) [][]string {
 	t.Helper()
 	var commands [][]string
@@ -164,8 +147,6 @@ func rexDelivery(t *testing.T, stub string) [][]string {
 	return commands
 }
 
-// rexCase runs rex.lua headless in dir with the stub on PATH, in the
-// session it names.
 func rexCase(t *testing.T, dir, stub, session string, env ...string) {
 	t.Helper()
 	headless(t, dir, "rex.lua", append([]string{
@@ -207,8 +188,6 @@ func TestBufferRexUnavailable(t *testing.T) {
 	}
 }
 
-// sessionPanes is the pane list of the stub session, in the order the
-// picker offers it: the match first.
 func sessionPanes(main, linked string) string {
 	return strings.Join([]string{
 		"block:01AGENT  llama  " + linked +
@@ -217,8 +196,6 @@ func sessionPanes(main, linked string) string {
 	}, "\n")
 }
 
-// sessionStub is the stub session every send test uses: the pane the
-// plugin runs in, an agent in linked, and a shell in main.
 func sessionStub(t *testing.T, main, linked string) string {
 	t.Helper()
 	return rexStub(t, blocksJSON(t,

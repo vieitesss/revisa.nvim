@@ -1,4 +1,3 @@
--- A comment the CLI reports as unknown is drawn as a marker, not a line.
 local api = vim.api
 
 local buf = api.nvim_create_buf(false, true)
@@ -48,7 +47,6 @@ H.equal({
 H.equal({ { "revisa: 1 outdated, 1 unknown", "RevisaOutdated" } },
     H.text(buf))
 
--- The groups are rendered on screen, in order, with the summary on line 1.
 api.nvim_win_set_buf(0, buf)
 vim.o.lines = 20
 vim.o.columns = 80

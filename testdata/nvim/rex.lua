@@ -12,8 +12,6 @@ if setting ~= "" then
     require("revisa").setup({ notify = setting })
 end
 
--- marked counts the entries that say they match the worktree, and
--- asserts each one came first.
 local function marked(offer)
     local seen = 0
     for position, item in ipairs(offer.items) do
@@ -25,8 +23,6 @@ local function marked(offer)
     return seen
 end
 
--- check_panes asserts one picker offered the expected panes, in order,
--- with the expected number of them marked.
 local function check_panes(number, expected, matched)
     local offer = offers[number]
     assert(offer, "picker " .. number .. " did not open")
@@ -34,7 +30,6 @@ local function check_panes(number, expected, matched)
     H.equal(matched, marked(offer))
 end
 
--- check_preview asserts the INFO notification that shows a pane.
 local function check_preview(text)
     for _, message in ipairs(messages) do
         if message.message == text
@@ -45,15 +40,12 @@ local function check_preview(text)
     error("no preview of the pane: " .. vim.inspect(messages))
 end
 
--- check_confirm asserts the confirm that follows a preview.
 local function check_confirm()
     local offer = offers[#offers]
     assert(offer.prompt:find("send to", 1, true), offer.prompt)
     H.equal({ "send", "cancel" }, offer.items)
 end
 
--- vim.ui.select answers with the next REVISA_PICK entry, recording what
--- the picker offered.
 vim.ui.select = function(items, options, on_choice)
     offers[#offers + 1] = { items = items, prompt = options.prompt }
     if #offers == 2 then

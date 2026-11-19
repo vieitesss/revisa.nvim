@@ -1,5 +1,3 @@
--- A failed command reports its stderr, else "<what> failed (exit N)",
--- whether the failed process is the CLI, rex or recado.
 local api = vim.api
 local buf, win = H.open()
 vim.env.PATH = vim.env.REVISA_STUBS .. ":" .. vim.env.PATH

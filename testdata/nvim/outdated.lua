@@ -1,8 +1,6 @@
 local buf = H.open()
 vim.cmd("Revisa refresh")
 
--- The comment whose anchor text is gone keeps no sign on its stored line,
--- and its stored line is not in the buffer any more.
 H.equal({ { line = 2, text = ">", group = "RevisaSign" } }, H.signs(buf))
 
 H.equal({
@@ -24,8 +22,6 @@ H.equal({
 
 H.equal({ { "revisa: 1 outdated", "RevisaOutdated" } }, H.text(buf))
 
--- The block is rendered below the last buffer line, not just stored, and
--- the summary is rendered flush right on the first line.
 vim.o.lines = 20
 vim.o.columns = 80
 local rows = H.screen()

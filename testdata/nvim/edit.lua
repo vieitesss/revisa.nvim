@@ -1,6 +1,3 @@
--- :Revisa edit opens the editor holding the body of the comment on the
--- cursor line, and saving stores the new body. Off any comment, it picks
--- one of the file's comments.
 local api = vim.api
 local buf = H.open()
 api.nvim_win_set_cursor(0, { 2, 0 })
