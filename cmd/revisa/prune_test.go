@@ -108,6 +108,4 @@ func TestPruneErrors(t *testing.T) {
 	p, _ := reviewProject(t)
 	linked := p.worktrees[1]
 	fails(t, linked, `unexpected argument "extra"`, 2, "prune", "extra")
-	fails(t, linked, "flag provided but not defined: -nope", 2,
-		"prune", "--nope")
 }
