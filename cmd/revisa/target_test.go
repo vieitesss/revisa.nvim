@@ -5,21 +5,49 @@ import (
 	"testing"
 )
 
-// TestBufferTargetOfEveryBufferKind resolves the reviewing target of a
-// file buffer, a changes buffer and all three diff buffers, so the one
-// module that answers where a buffer is and which version it shows stays
-// one module.
-func TestBufferTargetOfEveryBufferKind(t *testing.T) {
+// TestBufferCommentsUseTheDisplayedFileVersion checks saved comments,
+// not the private target tables used to choose their branch and path.
+func TestBufferCommentsUseTheDisplayedFileVersion(t *testing.T) {
 	p, linked := changesProject(t)
 	main := p.worktrees[0]
+	base := git(t, linked, "merge-base", "main", "HEAD")
 	headless(t, main, "target.lua",
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
 		"REVISA_MAIN_FILE="+filepath.Join(main, "src/a.lua"),
-		"REVISA_MAIN="+realPath(t, main),
-		"REVISA_LINKED="+realPath(t, linked),
-		"REVISA_TARGET="+linked,
-		"REVISA_HEAD="+git(t, linked, "rev-parse", "HEAD"),
-		"REVISA_BASE="+git(t, linked, "merge-base", "main", "HEAD"))
+		"REVISA_TARGET="+linked)
+	for _, c := range []struct {
+		dir  string
+		want []map[string]any
+	}{
+		{main, []map[string]any{{
+			"branch": "main", "path": "src/a.lua", "side": "new",
+			"anchor_text": "local a = 1", "body": "Main file",
+		}}},
+		{linked, []map[string]any{
+			{
+				"branch": "feat/x", "path": "src/a.lua", "side": "new",
+				"anchor_text": "local a = 1", "body": "Linked file",
+			},
+			{
+				"branch": "feat/x", "path": "src/gone.go", "side": "old",
+				"commit": base, "anchor_text": "package gone",
+				"body": "Deleted old file",
+			},
+		}},
+	} {
+		got := listJSON(t, c.dir)
+		if len(got) != len(c.want) {
+			t.Fatalf("from %s: got %v, want %v", c.dir, got, c.want)
+		}
+		for i, want := range c.want {
+			for field, value := range want {
+				if got[i][field] != value {
+					t.Errorf("%s comment %d %s: got %#v, want %#v",
+						c.dir, i, field, got[i][field], value)
+				}
+			}
+		}
+	}
 }
 
 // TestBufferOldSideKeepsTheReviewedBranch pins #9: a comment on the old

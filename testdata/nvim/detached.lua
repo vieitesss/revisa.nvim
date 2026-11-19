@@ -1,5 +1,4 @@
 local api = vim.api
-local target = require("revisa.target")
 
 -- Two detached worktrees have no branch to name their changes buffer, so
 -- its name must come from the head and the worktree. Otherwise the second
@@ -8,8 +7,8 @@ local target = require("revisa.target")
 local function nameOf(path)
     require("revisa").review(path)
     local buf = api.nvim_get_current_buf()
-    H.equal("changes", target.of(buf).kind)
-    H.equal("", target.of(buf).branch)
+    H.equal({ "branch (detached)" },
+        api.nvim_buf_get_lines(buf, 1, 2, false))
     return buf, api.nvim_buf_get_name(buf)
 end
 

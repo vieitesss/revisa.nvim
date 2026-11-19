@@ -23,13 +23,6 @@ assert(new, "no real-file side in the diff tab")
 api.nvim_set_current_win(new)
 vim.cmd.saveas(vim.fn.fnameescape(worktree .. "/renamed.txt"))
 local buf = api.nvim_get_current_buf()
-H.equal({
-    kind = "file",
-    worktree = worktree,
-    cwd = worktree,
-    path = "renamed.txt",
-    side = "new",
-}, require("revisa.target").of(buf))
 
 api.nvim_win_set_cursor(new, { 2, 0 })
 vim.cmd("Revisa comment")
