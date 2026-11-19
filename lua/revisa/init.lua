@@ -77,9 +77,7 @@ function M.edit()
     if refused(buf, "editing") then
         return
     end
-    display.refresh(buf)
-    -- refresh has already said why a buffer has no file target.
-    local found = target.file(target.of(buf))
+    local found = display.refresh(buf)
     if not found then
         return
     end

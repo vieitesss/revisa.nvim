@@ -106,7 +106,7 @@ local changes = api.nvim_create_buf(false, true)
 vim.b[changes].revisa_session = {
     worktree = vim.fn.getcwd(), entries_by_line = {},
 }
-require("revisa.display").refresh(changes)
+H.equal(nil, require("revisa.display").refresh(changes))
 H.error(messages, "comments require a real file buffer")
 H.equal({}, H.marks(changes))
 

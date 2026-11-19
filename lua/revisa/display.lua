@@ -206,7 +206,8 @@ local function draw(buf, target, comments, moved)
 end
 
 -- refresh draws buf's comments from the CLI: the file version the buffer
--- shows, the comments stored for it, and where they sit now.
+-- shows, the comments stored for it, and where they sit now. It returns
+-- that file target, or nil after reporting an error.
 function M.refresh(buf)
     buf = buf or api.nvim_get_current_buf()
     local found, err = targets.file(targets.of(buf))
@@ -219,6 +220,7 @@ function M.refresh(buf)
         return
     end
     draw(buf, found, comments)
+    return found
 end
 
 -- at says which comments :Revisa edit may change on line: those drawn
