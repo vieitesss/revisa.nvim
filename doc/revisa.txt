@@ -32,11 +32,25 @@ The worktree picker uses |vim.ui.select|. It needs no picker plugin.
 ==============================================================================
 INSTALL                                                        *revisa-install*
 
-The README shows plugin manager specs. Each builds the CLI and links it: >
+The plugin builds its own CLI. Each time it loads, it compares the commit
+its checkout is at with the commit of the last build, recorded in
+bin/.revisa-rev. When they differ, as after an install or an update, it
+runs this in the checkout, in the background: >
 
     go build -o bin/revisa ./cmd/revisa && bin/revisa install
 <
-Run the same command from the checkout to install by hand.
+A notification says when the build starts and when it ends. A failure
+shows the error, and the next start tries again. A command run before the
+first build ends reports that the CLI is still building. The check works
+under any plugin manager, and after a git pull. It does nothing when the
+plugin directory is not its own git checkout.
+
+                                                     *g:revisa_auto_build*
+To build and install the CLI yourself, set this before the plugin loads: >
+
+    vim.g.revisa_auto_build = false
+<
+Then run the command above from the checkout after each update.
 
 revisa install creates two symlinks, making parent directories when needed:
 

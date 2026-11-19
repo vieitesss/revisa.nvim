@@ -20,13 +20,15 @@ func headless(t *testing.T, dir, script string, env ...string) {
 	}
 	nvim, err := exec.LookPath("nvim")
 	if err != nil {
-		t.Fatal("headless plugin tests require Neovim 0.10+ on PATH")
+		t.Fatal("headless plugin tests require Neovim 0.12+ on PATH")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, nvim, "--headless", "--clean",
 		"--cmd", "lua vim.opt.rtp:prepend(vim.env.REVISA_PLUGIN)",
 		"--cmd", "set loadplugins",
+		"--cmd", "if empty($REVISA_AUTO_BUILD) | "+
+			"let g:revisa_auto_build = v:false | endif",
 		"-c", "lua vim.schedule(function() "+
 			"dofile(vim.env.REVISA_RUNNER) end)")
 	cmd.Dir = dir
@@ -41,6 +43,31 @@ func headless(t *testing.T, dir, script string, env ...string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("headless Neovim: %v\n%s", err, out)
 	}
+}
+
+// copyPlugin copies the plugin's Lua code into a new directory, so a test
+// can give it its own bin/ without touching the checkout.
+func copyPlugin(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	for _, dir := range []string{"lua", "plugin"} {
+		err := filepath.WalkDir("../../"+dir,
+			func(path string, entry os.DirEntry, err error) error {
+				if err != nil || entry.IsDir() {
+					return err
+				}
+				relative, err := filepath.Rel("../..", path)
+				if err != nil {
+					return err
+				}
+				writeFile(t, root, relative, readFile(t, path))
+				return nil
+			})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
 }
 
 func TestBufferPluginEntryPointsHighlightsAndHelp(t *testing.T) {
@@ -105,24 +132,7 @@ func TestBufferBinaryFallbackAndMissingError(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			p, _ := reviewProject(t)
 			linked := p.worktrees[1]
-			root := t.TempDir()
-			for _, dir := range []string{"lua", "plugin"} {
-				err := filepath.WalkDir("../../"+dir,
-					func(path string, entry os.DirEntry, err error) error {
-						if err != nil || entry.IsDir() {
-							return err
-						}
-						relative, err := filepath.Rel("../..", path)
-						if err != nil {
-							return err
-						}
-						writeFile(t, root, relative, readFile(t, path))
-						return nil
-					})
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
+			root := copyPlugin(t)
 			if kind == "fallback" {
 				binary := filepath.Join(root, "bin/revisa")
 				writeFile(t, root, "bin/revisa", readFile(t, revisa))

@@ -11,35 +11,9 @@ a standalone Go CLI, and an agent skill.
 
 ## Install
 
-Both plugin managers below build the CLI into the checkout's `bin/revisa`,
-then run `revisa install`. It links the CLI to `~/.local/bin/revisa` and the
-agent skill to `~/.agents/skills/revisa`. Keep `~/.local/bin` on `PATH`.
-See `:help revisa-install` for details.
-
-### vim.pack
-
-Define the build hook before `vim.pack.add()`, so it also runs on the first
-install:
+With `vim.pack`:
 
 ```lua
-vim.api.nvim_create_autocmd("PackChanged", {
-    callback = function(ev)
-        local kind = ev.data.kind
-        if ev.data.spec.name ~= "revisa.nvim"
-            or (kind ~= "install" and kind ~= "update") then
-            return
-        end
-        local build = "go build -o bin/revisa ./cmd/revisa"
-            .. " && bin/revisa install"
-        local result = vim.system({ "sh", "-c", build },
-            { cwd = ev.data.path, text = true }):wait()
-        if result.code ~= 0 then
-            vim.notify("revisa.nvim: build failed\n" .. result.stderr,
-                vim.log.levels.ERROR)
-        end
-    end,
-})
-
 vim.pack.add({
     {
         src = "https://github.com/vieitesss/revisa.nvim",
@@ -48,17 +22,20 @@ vim.pack.add({
 })
 ```
 
-### lazy.nvim
+With lazy.nvim:
 
 ```lua
-{
-    "vieitesss/revisa.nvim",
-    version = "*",
-    build = "go build -o bin/revisa ./cmd/revisa && bin/revisa install",
-}
+{ "vieitesss/revisa.nvim", version = "*" }
 ```
 
-`version` follows the latest release instead of `main` in both managers.
+`version` follows the latest release instead of `main`.
+
+The plugin builds its own CLI. On the first start after an install or
+update, it runs `go build` in the background, then `revisa install`. That
+links the CLI to `~/.local/bin/revisa` and the agent skill to
+`~/.agents/skills/revisa`; keep `~/.local/bin` on `PATH`. To build and
+install the CLI yourself, set `vim.g.revisa_auto_build = false` before the
+plugin loads. See `:help revisa-install`.
 
 ## Quick start
 

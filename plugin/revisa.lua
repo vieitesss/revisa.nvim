@@ -83,3 +83,5 @@ api.nvim_create_autocmd({ "WinResized", "VimResized" }, {
         require("revisa.display").redraw()
     end,
 })
+
+require("revisa.build").check()

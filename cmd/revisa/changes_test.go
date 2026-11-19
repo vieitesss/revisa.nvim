@@ -456,7 +456,7 @@ func TestReviewStartsNeovim(t *testing.T) {
 func TestReviewOpensTheWorktreeInNeovim(t *testing.T) {
 	nvim, err := exec.LookPath("nvim")
 	if err != nil {
-		t.Fatal("review tests require Neovim 0.10+ on PATH")
+		t.Fatal("review tests require Neovim 0.12+ on PATH")
 	}
 	root, err := filepath.Abs("../..")
 	if err != nil {

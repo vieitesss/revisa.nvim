@@ -32,6 +32,11 @@ function M.run(context, args)
     local binary = vim.fn.exepath("revisa")
     if binary == "" then
         if vim.fn.executable(fallback) == 0 then
+            if require("revisa.build").building() then
+                M.error("revisa: the CLI is still building, try again"
+                    .. " when it is built")
+                return nil
+            end
             M.error("revisa not found: tried revisa on PATH and " .. fallback)
             return nil
         end
