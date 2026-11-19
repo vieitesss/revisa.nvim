@@ -1,9 +1,7 @@
 package main_test
 
 import (
-	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -53,14 +51,7 @@ type stubAgent struct {
 
 func agentsJSON(t *testing.T, agents ...stubAgent) string {
 	t.Helper()
-	if agents == nil {
-		agents = []stubAgent{}
-	}
-	data, err := json.Marshal(map[string]any{"agents": agents})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(data)
+	return jsonList(t, "agents", agents)
 }
 
 func recadoStub(t *testing.T, agents string) string {
@@ -85,20 +76,6 @@ func stubCodes(t *testing.T, stub string, codes ...int) {
 func stubStderr(t *testing.T, stub string, call int, message string) {
 	t.Helper()
 	writeFile(t, stub, "stderr"+strconv.Itoa(call), message+"\n")
-}
-
-func sendPath(t *testing.T, stub string) string {
-	t.Helper()
-	gitBinary, err := exec.LookPath("git")
-	if err != nil {
-		t.Fatal(err)
-	}
-	parts := []string{}
-	if stub != "" {
-		parts = append(parts, stub)
-	}
-	parts = append(parts, filepath.Dir(revisa), filepath.Dir(gitBinary))
-	return strings.Join(parts, string(os.PathListSeparator))
 }
 
 func stubCalls(t *testing.T, stub string) int {
@@ -154,23 +131,11 @@ func wantArgv(id string) []string {
 	}
 }
 
-func equalStrings(t *testing.T, what string, want, got []string) {
-	t.Helper()
-	if len(want) != len(got) {
-		t.Fatalf("%s: got %q, want %q", what, got, want)
-	}
-	for i := range want {
-		if want[i] != got[i] {
-			t.Fatalf("%s: got %q, want %q", what, got, want)
-		}
-	}
-}
-
 func sendCase(t *testing.T, dir, stub string, env ...string) {
 	t.Helper()
 	headless(t, dir, "send.lua", append([]string{
 		"RECADO_STUB=" + stub,
-		"PATH=" + sendPath(t, stub),
+		"PATH=" + notifierPath(t, stub),
 		"REX_SESSION=",
 	}, env...)...)
 }
@@ -208,7 +173,7 @@ func TestBufferSendUnavailable(t *testing.T) {
 				"REVISA_CASE=unavailable",
 				"REVISA_SETTING="+c.setting,
 				"REVISA_ERROR="+c.want,
-				"PATH="+sendPath(t, path))
+				"PATH="+notifierPath(t, path))
 			assertNoSend(t, stub)
 		})
 	}
@@ -235,6 +200,13 @@ func TestBufferSendListsRecipientsInOrder(t *testing.T) {
 	}
 	stub := recadoStub(t, agentsJSON(t,
 		stubAgent{ID: "gone", Harness: "claude", Cwd: linked},
+		stubAgent{ID: "codex", Harness: "codex", Live: true, Cwd: linked},
+		stubAgent{ID: "elsewhere", Harness: "claude", Live: true,
+			Cwd: linked, Machine: "other"},
+		stubAgent{ID: "upstream", Harness: "pi", Live: true,
+			Cwd: linked, Remote: "y"},
+		stubAgent{ID: "recado://host/id", Harness: "pi", Live: true,
+			Cwd: linked},
 		stubAgent{ID: "far", Harness: "aider", Live: true},
 		stubAgent{ID: "main", Harness: "claude", Live: true, Cwd: main,
 			State: "busy"},
@@ -441,19 +413,29 @@ func TestBufferSendRunsInTheExplicitWorktree(t *testing.T) {
 }
 
 func TestBufferSendFallsBackToRecado(t *testing.T) {
-	p, home := homeProject(t)
-	linked := p.worktrees[1]
-	writeFile(t, linked, "src/a.lua", "anchor\n")
-	stub := recadoStub(t, agentsJSON(t,
-		stubAgent{ID: "match", Harness: "claude", Live: true, Cwd: linked},
-	))
-	sendCase(t, linked, stub,
-		"HOME="+home,
-		"REVISA_CASE=picker",
-		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
-		"REVISA_SETTING=",
-		"REVISA_OFFERS=1",
-		"REVISA_PANES=claude  ~/w/linked  feat/x",
-		"REVISA_SENT=claude in ~/w/linked")
-	equalStrings(t, "argv", wantArgv("match"), stubArgv(t, stub, 1))
+	cases := map[string]string{
+		"outside Rex": "",
+		"rex missing": "session:one",
+	}
+	for name, session := range cases {
+		t.Run(name, func(t *testing.T) {
+			p, home := homeProject(t)
+			linked := p.worktrees[1]
+			writeFile(t, linked, "src/a.lua", "anchor\n")
+			stub := recadoStub(t, agentsJSON(t,
+				stubAgent{ID: "match", Harness: "claude", Live: true,
+					Cwd: linked},
+			))
+			sendCase(t, linked, stub,
+				"HOME="+home,
+				"REX_SESSION="+session,
+				"REVISA_CASE=picker",
+				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+				"REVISA_SETTING=",
+				"REVISA_OFFERS=1",
+				"REVISA_PANES=claude  ~/w/linked  feat/x",
+				"REVISA_SENT=claude in ~/w/linked")
+			equalStrings(t, "argv", wantArgv("match"), stubArgv(t, stub, 1))
+		})
+	}
 }

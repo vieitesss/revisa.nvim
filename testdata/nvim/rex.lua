@@ -1,4 +1,3 @@
-local api = vim.api
 local case = vim.env.REVISA_CASE
 
 local messages = H.notifications()
@@ -12,7 +11,7 @@ if setting ~= "" then
     require("revisa").setup({ notify = setting })
 end
 
-local function check_panes(offer)
+local function check_recipients(offer)
     assert(offer, "picker did not open")
     H.equal(vim.split(vim.env.REVISA_PANES, "\n", { plain = true }),
         offer.items)
@@ -50,14 +49,14 @@ elseif case == "send" then
     H.open()
     vim.cmd("Revisa send")
     H.equal(2, #offers)
-    check_panes(offers[1])
+    check_recipients(offers[1])
     check_confirm(offers[2])
     check_sent()
 elseif case == "cancel" then
     H.open()
     vim.cmd("Revisa send")
     H.equal(2, #offers)
-    check_panes(offers[1])
+    check_recipients(offers[1])
     check_confirm(offers[2])
     for _, message in ipairs(messages) do
         assert(not message.message:find("sent to", 1, true),

@@ -3,7 +3,6 @@ package main_test
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -135,18 +134,6 @@ func rexStub(t *testing.T, sessions ...rexSession) string {
 	return dir
 }
 
-func jsonList[T any](t *testing.T, key string, entries []T) string {
-	t.Helper()
-	if entries == nil {
-		entries = []T{}
-	}
-	data, err := json.Marshal(map[string]any{key: entries})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(data)
-}
-
 func recordsJSON(t *testing.T, state string) string {
 	t.Helper()
 	records := []map[string]any{}
@@ -181,22 +168,12 @@ func processJSON(t *testing.T, block rexBlock) string {
 	return string(data)
 }
 
-func rexPath(t *testing.T, stubs ...string) string {
-	t.Helper()
-	gitBinary, err := exec.LookPath("git")
-	if err != nil {
-		t.Fatal(err)
-	}
-	parts := append([]string{}, stubs...)
-	parts = append(parts, filepath.Dir(revisa), filepath.Dir(gitBinary))
-	return strings.Join(parts, string(os.PathListSeparator))
-}
-
 // rexCalls is every command line the stub was asked to run.
 func rexCalls(t *testing.T, stub string) [][]string {
 	t.Helper()
 	var calls [][]string
-	for call := 1; call <= stubCalls(t, stub); call++ {
+	count := stubCalls(t, stub)
+	for call := 1; call <= count; call++ {
 		data, err := os.ReadFile(
 			filepath.Join(stub, "call"+strconv.Itoa(call)))
 		if err != nil {
@@ -233,10 +210,11 @@ func rexCase(t *testing.T, dir, stub, session string, env ...string) {
 	t.Helper()
 	headless(t, dir, "rex.lua", append([]string{
 		"REX_STUB=" + stub,
-		"PATH=" + rexPath(t, stub),
+		"PATH=" + notifierPath(t, stub),
 		"REX_SESSION=" + session,
 		"REX_BLOCK=block:01ME",
 	}, env...)...)
+	assertNoCapture(t, stub)
 }
 
 // leftSession is the session the plugin runs in: one agent, a shell, a
@@ -280,97 +258,84 @@ func rightSession(main, outside string) rexSession {
 }
 
 func TestBufferRexListsProgramsInOrder(t *testing.T) {
-	p, home := homeProject(t)
-	main, linked := p.worktrees[0], p.worktrees[1]
-	writeFile(t, linked, "src/a.lua", "anchor\n")
-	elsewhere := filepath.Join(home, "elsewhere")
-	outside := filepath.Join(home, "outside")
-	for _, dir := range []string{elsewhere, outside} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
+	cases := []struct {
+		name, pick, session, block, recipient string
+	}{
+		{"this session", "1", "session:one", "block:01AGENT",
+			"claude in revisa_nvim › editor"},
+		{"another session", "2", "session:two", "block:02MAIN",
+			"claude in other › editor"},
 	}
-	stub := rexStub(t, leftSession(linked, main, elsewhere),
-		rightSession(main, outside))
-	rexCase(t, linked, stub, "session:one",
-		"HOME="+home,
-		"REVISA_CASE=send",
-		"REVISA_SETTING=rex",
-		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
-		"REVISA_PANES="+strings.Join([]string{
-			"claude  ~/w/linked   feat/x  idle  [revisa_nvim › editor]",
-			"claude  ~/w/main     main    idle  [other › editor]",
-			"pi      ~/elsewhere          busy  [revisa_nvim]",
-			"pi      ~/outside            idle  [other › editor]",
-		}, "\n"),
-		"REVISA_ABSENT=block:,zsh,nvim",
-		"REVISA_PICK=1,1",
-		"REVISA_SENT=claude in revisa_nvim › editor")
-	assertNoCapture(t, stub)
-	want := [][]string{
-		{"send", "-s", "session:one", "-b", "block:01AGENT",
-			reviewMessage},
-		{"send-key", "-s", "session:one", "-b", "block:01AGENT",
-			"enter"},
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p, home := homeProject(t)
+			main, linked := p.worktrees[0], p.worktrees[1]
+			writeFile(t, linked, "src/a.lua", "anchor\n")
+			elsewhere := filepath.Join(home, "elsewhere")
+			outside := filepath.Join(home, "outside")
+			for _, dir := range []string{elsewhere, outside} {
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			stub := rexStub(t, leftSession(linked, main, elsewhere),
+				rightSession(main, outside))
+			rexCase(t, linked, stub, "session:one",
+				"HOME="+home,
+				"REVISA_CASE=send",
+				"REVISA_SETTING=rex",
+				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+				"REVISA_PANES="+strings.Join([]string{
+					"claude  ~/w/linked   feat/x  idle" +
+						"  [revisa_nvim › editor]",
+					"claude  ~/w/main     main    idle  [other › editor]",
+					"pi      ~/elsewhere          busy  [revisa_nvim]",
+					"pi      ~/outside            idle  [other › editor]",
+				}, "\n"),
+				"REVISA_PICK="+c.pick+",1",
+				"REVISA_SENT="+c.recipient)
+			want := [][]string{
+				{"send", "-s", c.session, "-b", c.block, reviewMessage},
+				{"send-key", "-s", c.session, "-b", c.block, "enter"},
+			}
+			equalCommands(t, "delivery", want, rexDelivery(t, stub))
+		})
 	}
-	equalCommands(t, "delivery", want, rexDelivery(t, stub))
-}
-
-func TestBufferRexSendsToTheRecipientsSession(t *testing.T) {
-	p, home := homeProject(t)
-	main, linked := p.worktrees[0], p.worktrees[1]
-	writeFile(t, linked, "src/a.lua", "anchor\n")
-	elsewhere := filepath.Join(home, "elsewhere")
-	outside := filepath.Join(home, "outside")
-	stub := rexStub(t, leftSession(linked, main, elsewhere),
-		rightSession(main, outside))
-	rexCase(t, linked, stub, "session:one",
-		"HOME="+home,
-		"REVISA_CASE=send",
-		"REVISA_SETTING=rex",
-		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
-		"REVISA_PANES="+strings.Join([]string{
-			"claude  ~/w/linked   feat/x  idle  [revisa_nvim › editor]",
-			"claude  ~/w/main     main    idle  [other › editor]",
-			"pi      ~/elsewhere          busy  [revisa_nvim]",
-			"pi      ~/outside            idle  [other › editor]",
-		}, "\n"),
-		"REVISA_PICK=2,1",
-		"REVISA_SENT=claude in other › editor")
-	want := [][]string{
-		{"send", "-s", "session:two", "-b", "block:02MAIN",
-			reviewMessage},
-		{"send-key", "-s", "session:two", "-b", "block:02MAIN",
-			"enter"},
-	}
-	equalCommands(t, "delivery", want, rexDelivery(t, stub))
-	assertNoCapture(t, stub)
 }
 
 func TestBufferRexCancelTypesNothing(t *testing.T) {
-	p, _ := reviewProject(t)
-	main, linked := p.worktrees[0], p.worktrees[1]
-	writeFile(t, linked, "src/a.lua", "anchor\n")
-	stub := rexStub(t, rexSession{
-		ID: "session:one", Label: "revisa_nvim",
-		Blocks: []rexBlock{
-			{ID: "block:01AGENT", Label: "shell", Cwd: linked,
-				Harness: "claude", State: "working"},
-		},
-	})
-	rexCase(t, linked, stub, "session:one",
-		"REVISA_CASE=cancel",
-		"REVISA_SETTING=rex",
-		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
-		"REVISA_PANES=claude  "+linked+
-			"  feat/x  busy  [revisa_nvim]",
-		"REVISA_PICK=1,cancel",
-		"REVISA_SENT=claude in revisa_nvim")
-	if got := rexDelivery(t, stub); len(got) != 0 {
-		t.Errorf("cancel typed into the pane: %q", got)
+	cases := []struct {
+		name, location, suffix, recipient string
+	}{
+		{"session location", "revisa_nvim", "  [revisa_nvim]",
+			"claude in revisa_nvim"},
+		{"working directory", "", "", "claude in ~/w/linked"},
 	}
-	assertNoCapture(t, stub)
-	_ = main
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p, home := homeProject(t)
+			linked := p.worktrees[1]
+			writeFile(t, linked, "src/a.lua", "anchor\n")
+			stub := rexStub(t, rexSession{
+				ID: "session:one", Label: c.location,
+				Blocks: []rexBlock{
+					{ID: "block:01AGENT", Label: "shell", Cwd: linked,
+						Harness: "claude", State: "working"},
+				},
+			})
+			rexCase(t, linked, stub, "session:one",
+				"HOME="+home,
+				"REVISA_CASE=cancel",
+				"REVISA_SETTING=rex",
+				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+				"REVISA_PANES=claude  ~/w/linked  feat/x  busy"+c.suffix,
+				"REVISA_PICK=1,cancel",
+				"REVISA_SENT="+c.recipient)
+			if got := rexDelivery(t, stub); len(got) != 0 {
+				t.Errorf("cancel typed into the pane: %q", got)
+			}
+		})
+	}
 }
 
 func TestBufferRexUnavailable(t *testing.T) {
@@ -399,7 +364,7 @@ func TestBufferRexUnavailable(t *testing.T) {
 				"REVISA_CASE=unavailable",
 				"REVISA_SETTING=rex",
 				"REVISA_ERROR=REX_SESSION set and rex on PATH",
-				"PATH="+rexPath(t, path))
+				"PATH="+notifierPath(t, path))
 			if calls := stubCalls(t, stub); calls != 0 {
 				t.Errorf("rex was called %d times", calls)
 			}
@@ -409,7 +374,7 @@ func TestBufferRexUnavailable(t *testing.T) {
 
 func TestBufferRexIsTheDefaultInRex(t *testing.T) {
 	p, _ := reviewProject(t)
-	main, linked := p.worktrees[0], p.worktrees[1]
+	linked := p.worktrees[1]
 	writeFile(t, linked, "src/a.lua", "anchor\n")
 	stub := rexStub(t, rexSession{
 		ID: "session:one", Label: "revisa_nvim",
@@ -428,7 +393,6 @@ func TestBufferRexIsTheDefaultInRex(t *testing.T) {
 		"REVISA_PANES=claude  "+linked+"  feat/x  idle  [revisa_nvim]",
 		"REVISA_PICK=1,1",
 		"REVISA_SENT=claude in revisa_nvim",
-		"PATH="+rexPath(t, stub, recado))
+		"PATH="+notifierPath(t, stub, recado))
 	assertNoSend(t, recado)
-	_ = main
 }
