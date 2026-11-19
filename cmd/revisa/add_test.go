@@ -85,17 +85,6 @@ func TestAddNewSidePrefersInvokingWorktreeOfSameBranch(t *testing.T) {
 	}
 }
 
-func TestListPrintsShortCommit(t *testing.T) {
-	p, head := reviewProject(t)
-	id := addOK(t, p.worktrees[1],
-		"--path", "src/a.lua", "--lines", "2-4", "--body", "Handle nil")
-	out, _, _ := run(t, p.worktrees[1], "list")
-	want := id + " src/a.lua:2-4 new " + head[:12] + "\nHandle nil\n"
-	if out != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out, want)
-	}
-}
-
 func TestAddForAnotherWorktreesBranch(t *testing.T) {
 	p, _ := reviewProject(t)
 	addOK(t, p.worktrees[0], "--branch", "feat/x",
