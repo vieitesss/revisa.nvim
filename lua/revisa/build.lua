@@ -1,7 +1,3 @@
--- The plugin builds its own CLI: on load it compares the commit its
--- checkout is at with the commit of the last build, and rebuilds and
--- reinstalls when they differ. This works the same under any plugin
--- manager, and after a plain git pull.
 local M = {}
 
 local source = debug.getinfo(1, "S").source:sub(2)
@@ -23,8 +19,6 @@ local function failed(message)
         vim.log.levels.ERROR)
 end
 
--- spawn runs command in the checkout and calls done with its result, or
--- reports why it could not start.
 local function spawn(command, done)
     local ok, err = pcall(vim.system, command,
         { cwd = root, text = true }, done)
@@ -109,7 +103,6 @@ function M.check()
     end
 end
 
--- building tells whether a build started by check is still running.
 function M.building()
     return building
 end

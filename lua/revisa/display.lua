@@ -2,12 +2,8 @@ local M = {}
 local api = vim.api
 local placement = require("revisa.placement")
 local namespace = api.nvim_create_namespace("revisa.comments")
--- drawn holds, for each buffer drawn into, what its last draw showed, so a
--- resize can redraw it without asking the CLI again.
 local drawn = {}
 
--- width is how many cells a comment line may take in buf: the text width
--- of the narrowest window showing it, kept between 20 and 80.
 local function width(buf)
     local cells = 80
     for _, win in ipairs(vim.fn.win_findbuf(buf)) do
@@ -18,9 +14,6 @@ local function width(buf)
     return math.max(20, cells)
 end
 
--- place is where one comment is drawn at: the lines its signs moved to,
--- else its own. A comment whose lines were deleted is hidden, never put
--- back on the CLI's last coordinates.
 local function place(comment, where, moved)
     local now = moved[comment]
     if now and now.deleted then
@@ -33,9 +26,7 @@ local function place(comment, where, moved)
         where.show_resolved, where.cells)
 end
 
--- waiting reports whether win keeps its sign column hidden until a sign
--- shows, which 'signcolumn' auto and auto:N do.
-local function waiting(win)
+local function hasAutoSignColumn(win)
     local column = api.nvim_get_option_value("signcolumn", { win = win })
     return column == "auto" or column:sub(1, 5) == "auto:"
 end
@@ -53,8 +44,6 @@ function M.buffers()
     return bufs
 end
 
--- groups is the order the end block groups markers in, with the highlight
--- group of each heading.
 local groups = {
     { condition = "outdated", group = "RevisaOutdated" },
     { condition = "unknown", group = "RevisaUnknown" },
@@ -77,8 +66,6 @@ local function signs(buf, placed)
     return first, last
 end
 
--- body draws a comment below the last of its lines. Leaving room for
--- padding below the anchor works even on empty lines.
 local function body(buf, placed)
     api.nvim_buf_set_extmark(buf, namespace, placed.line_end, 0, {
         virt_lines = placed.body,
@@ -87,8 +74,6 @@ local function body(buf, placed)
     })
 end
 
--- block groups the markers by condition into one block of virtual lines.
--- counts holds how many markers each condition has.
 local function block(markers)
     local counts = {}
     for _, group in ipairs(groups) do
@@ -118,7 +103,6 @@ local function block(markers)
     return lines, counts
 end
 
--- summary is the line-1 text that makes the block findable in a long file.
 local function summary(counts)
     local parts = {}
     for _, group in ipairs(groups) do
@@ -133,9 +117,6 @@ local function summary(counts)
     return "revisa: " .. table.concat(parts, ", ")
 end
 
--- draw shows the comments of the file version target names. A comment
--- with no current lines is drawn in one block below the last line, not on
--- a guessed line.
 function M.draw(buf, target, comments, show_resolved, moved)
     api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
     if not target or target.kind ~= "file" then
@@ -175,7 +156,7 @@ function M.draw(buf, target, comments, show_resolved, moved)
     -- A sign column that 'signcolumn' keeps hidden until a sign shows is
     -- laid out on the next redraw, so the bodies are wrapped after it.
     for _, win in ipairs(vim.fn.win_findbuf(buf)) do
-        if waiting(win) then
+        if hasAutoSignColumn(win) then
             vim.cmd.redraw()
             break
         end
@@ -213,8 +194,6 @@ function M.draw(buf, target, comments, show_resolved, moved)
     })
 end
 
--- row is the line one anchor sign is on now, or nil when its line is
--- deleted or past the end of the buffer.
 local function row(buf, id, count)
     local mark = api.nvim_buf_get_extmark_by_id(buf, namespace, id,
         { details = true })
@@ -228,10 +207,6 @@ local function row(buf, id, count)
     return line
 end
 
--- moved is the lines each comment is on now, read from its signs before
--- a draw clears them: a line inserted above moves the comment, and a
--- redraw must keep it there rather than in the CLI's last coordinates.
--- A comment whose signs are gone is recorded as deleted.
 local function moved(buf, anchors)
     local count = api.nvim_buf_line_count(buf)
     local rows = {}

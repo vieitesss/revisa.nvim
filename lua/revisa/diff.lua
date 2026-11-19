@@ -2,16 +2,14 @@ local M = {}
 local api = vim.api
 local cli = require("revisa.cli")
 
--- probe is how many bytes of each side are checked for a NUL byte.
-local probe = 8000
+local binaryProbeBytes = 8000
 
--- read returns the first bytes of path, or nil when it is not readable.
-local function read(path)
+local function readProbe(path)
     local file = io.open(path, "rb")
     if not file then
         return nil
     end
-    local bytes = file:read(probe)
+    local bytes = file:read(binaryProbeBytes)
     file:close()
     return bytes
 end
@@ -24,7 +22,6 @@ local function name(commit, path)
     return "revisa://" .. commit:sub(1, 7) .. "/" .. path
 end
 
--- show returns the content of path at commit, read by git itself.
 local function show(worktree, commit, path)
     local command = { "git", "-C", worktree, "show", commit .. ":" .. path }
     local output, why = cli.exec(command, {}, "git show")
@@ -34,7 +31,6 @@ local function show(worktree, commit, path)
     return output
 end
 
--- lines splits file content into the buffer lines it stands for.
 local function lines(text)
     local list = vim.split(text, "\n", { plain = true })
     if list[#list] == "" then
@@ -53,8 +49,6 @@ local function wipe(named)
     end
 end
 
--- scratch makes the read-only scratch buffer named for one side. path
--- gives the buffer its filetype, nil leaves it unset.
 local function scratch(named, text, path)
     wipe(named)
     local buf = api.nvim_create_buf(false, true)
@@ -70,17 +64,12 @@ local function scratch(named, text, path)
     return buf
 end
 
--- close closes the tab the diff was opened in.
 function M.close()
     if #api.nvim_list_tabpages() > 1 then
         vim.cmd.tabclose()
     end
 end
 
--- pin stores the review target of one diff buffer, so commenting there
--- does not ask git where the buffer is. It also stores the buffer name
--- the target was read for: a :saveas renames the buffer, and the pinned
--- path then names a file the buffer no longer shows.
 local function pin(buf, worktree, branch, path, side, commit)
     vim.b[buf].revisa_target = {
         name = api.nvim_buf_get_name(buf),
@@ -108,7 +97,7 @@ function M.open(change)
     local file = change.worktree .. "/" .. change.path
     local new
     if change.status ~= "D" then
-        new = read(file)
+        new = readProbe(file)
     end
     if isBinary(old) or isBinary(new) then
         cli.error("revisa: " .. change.path .. " is binary")
