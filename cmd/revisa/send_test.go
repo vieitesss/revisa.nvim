@@ -1,9 +1,7 @@
 package main_test
 
 import (
-	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -45,6 +43,7 @@ type stubAgent struct {
 	ID      string `json:"id"`
 	Harness string `json:"harness"`
 	Live    bool   `json:"live"`
+	State   string `json:"state,omitempty"`
 	Cwd     string `json:"cwd,omitempty"`
 	Machine string `json:"machine,omitempty"`
 	Remote  string `json:"remote,omitempty"`
@@ -52,14 +51,7 @@ type stubAgent struct {
 
 func agentsJSON(t *testing.T, agents ...stubAgent) string {
 	t.Helper()
-	if agents == nil {
-		agents = []stubAgent{}
-	}
-	data, err := json.Marshal(map[string]any{"agents": agents})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(data)
+	return jsonList(t, "agents", agents)
 }
 
 func recadoStub(t *testing.T, agents string) string {
@@ -84,20 +76,6 @@ func stubCodes(t *testing.T, stub string, codes ...int) {
 func stubStderr(t *testing.T, stub string, call int, message string) {
 	t.Helper()
 	writeFile(t, stub, "stderr"+strconv.Itoa(call), message+"\n")
-}
-
-func sendPath(t *testing.T, stub string) string {
-	t.Helper()
-	gitBinary, err := exec.LookPath("git")
-	if err != nil {
-		t.Fatal(err)
-	}
-	parts := []string{}
-	if stub != "" {
-		parts = append(parts, stub)
-	}
-	parts = append(parts, filepath.Dir(revisa), filepath.Dir(gitBinary))
-	return strings.Join(parts, string(os.PathListSeparator))
 }
 
 func stubCalls(t *testing.T, stub string) int {
@@ -145,7 +123,7 @@ func assertNoSend(t *testing.T, stub string) {
 
 const reviewMessage = "revisa: review comments are waiting on branch " +
 	"'feat/x'. Run: revisa list --branch 'feat/x' --status open." +
-	" Answer each with revisa resolve, not recado reply."
+	" Answer each with revisa resolve."
 
 func wantArgv(id string) []string {
 	return []string{
@@ -153,23 +131,12 @@ func wantArgv(id string) []string {
 	}
 }
 
-func equalStrings(t *testing.T, what string, want, got []string) {
-	t.Helper()
-	if len(want) != len(got) {
-		t.Fatalf("%s: got %q, want %q", what, got, want)
-	}
-	for i := range want {
-		if want[i] != got[i] {
-			t.Fatalf("%s: got %q, want %q", what, got, want)
-		}
-	}
-}
-
 func sendCase(t *testing.T, dir, stub string, env ...string) {
 	t.Helper()
 	headless(t, dir, "send.lua", append([]string{
 		"RECADO_STUB=" + stub,
-		"PATH=" + sendPath(t, stub),
+		"PATH=" + notifierPath(t, stub),
+		"REX_SESSION=",
 	}, env...)...)
 }
 
@@ -182,11 +149,15 @@ func TestBufferSendUnavailable(t *testing.T) {
 		"notify none": {
 			setting: "none",
 			stub:    true,
-			want:    `setup({ notify = "recado" | "rex" })`,
+			want:    "Revisa send is off",
 		},
 		"recado missing": {
 			setting: "recado",
 			want:    "recado is not on PATH",
+		},
+		"auto without a notifier": {
+			want: "needs rex, with REX_SESSION set and rex on PATH," +
+				" or recado on PATH",
 		},
 	}
 	for name, c := range cases {
@@ -202,7 +173,7 @@ func TestBufferSendUnavailable(t *testing.T) {
 				"REVISA_CASE=unavailable",
 				"REVISA_SETTING="+c.setting,
 				"REVISA_ERROR="+c.want,
-				"PATH="+sendPath(t, path))
+				"PATH="+notifierPath(t, path))
 			assertNoSend(t, stub)
 		})
 	}
@@ -215,15 +186,16 @@ func TestBufferSendValidatesTheSetting(t *testing.T) {
 	sendCase(t, linked, stub,
 		"REVISA_CASE=invalid",
 		"REVISA_SETTING=bogus",
-		"REVISA_ERROR="+`setup({ notify = "recado" | "rex" })`)
+		"REVISA_ERROR=auto, none, recado or rex")
 	assertNoSend(t, stub)
 }
 
-func TestBufferSendPrefersTheWorktreeMatch(t *testing.T) {
-	p, _ := reviewProject(t)
-	linked := p.worktrees[1]
-	link := filepath.Join(t.TempDir(), "linked")
-	if err := os.Symlink(linked, link); err != nil {
+func TestBufferSendListsRecipientsInOrder(t *testing.T) {
+	p, home := homeProject(t)
+	main, linked := p.worktrees[0], p.worktrees[1]
+	writeFile(t, linked, "src/a.lua", "anchor\n")
+	outside := filepath.Join(home, "café")
+	if err := os.MkdirAll(outside, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	stub := recadoStub(t, agentsJSON(t,
@@ -235,68 +207,34 @@ func TestBufferSendPrefersTheWorktreeMatch(t *testing.T) {
 			Cwd: linked, Remote: "y"},
 		stubAgent{ID: "recado://host/id", Harness: "pi", Live: true,
 			Cwd: linked},
-		stubAgent{ID: "opencode-1", Harness: "opencode", Live: true,
-			Cwd: linked},
-		stubAgent{ID: "match", Harness: "claude", Live: true,
-			Cwd: filepath.Join(link, "src")},
+		stubAgent{ID: "far", Harness: "aider", Live: true},
+		stubAgent{ID: "main", Harness: "claude", Live: true, Cwd: main,
+			State: "busy"},
+		stubAgent{ID: "linked", Harness: "claude", Live: true,
+			Cwd: filepath.Join(linked, "src"), State: "idle"},
+		stubAgent{ID: "plain", Harness: "pi", Live: true, Cwd: outside,
+			State: "idle"},
+		stubAgent{ID: "opencode", Harness: "opencode", Live: true,
+			Cwd: linked, State: "busy"},
 	))
-	sendCase(t, p.worktrees[0], stub,
+	sendCase(t, linked, stub,
+		"HOME="+home,
 		"REVISA_CASE=picker",
 		"REVISA_SETTING=recado",
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
 		"REVISA_OFFERS=1",
-		"REVISA_MARKED=1",
-		"REVISA_ABSENT=gone,codex,elsewhere,upstream,recado://",
-		"REVISA_SENT=match")
-	equalStrings(t, "argv", wantArgv("match"),
-		stubArgv(t, stub, 1))
+		"REVISA_PANES="+strings.Join([]string{
+			"claude    ~/w/linked/src  feat/x  idle",
+			"claude    ~/w/main        main    busy",
+			"aider",
+			"pi        ~/café                  idle",
+			"opencode                          busy",
+		}, "\n"),
+		"REVISA_ABSENT=gone",
+		"REVISA_SENT=claude in ~/w/linked/src")
+	equalStrings(t, "argv", wantArgv("linked"), stubArgv(t, stub, 1))
 	if got := stubAddr(t, stub, 1); got != "revisa" {
 		t.Errorf("RECADO_ADDR %q, want revisa", got)
-	}
-}
-
-func TestBufferSendFallsBackToTheManualPicker(t *testing.T) {
-	nowhere := t.TempDir()
-	cases := map[string][]stubAgent{
-		"duplicate": {
-			{ID: "one", Harness: "claude", Live: true, Cwd: "WORKTREE"},
-			{ID: "two", Harness: "pi", Live: true, Cwd: "WORKTREE"},
-		},
-		"unknown cwd": {
-			{ID: "one", Harness: "claude", Live: true},
-		},
-		"opencode cwd": {
-			{ID: "one", Harness: "opencode", Live: true,
-				Cwd: "WORKTREE"},
-		},
-		"outside git": {
-			{ID: "one", Harness: "claude", Live: true, Cwd: nowhere},
-		},
-	}
-	for name, agents := range cases {
-		t.Run(name, func(t *testing.T) {
-			p, _ := reviewProject(t)
-			linked := p.worktrees[1]
-			for i := range agents {
-				if agents[i].Cwd == "WORKTREE" {
-					agents[i].Cwd = linked
-				}
-			}
-			stub := recadoStub(t, agentsJSON(t, agents...))
-			sendCase(t, linked, stub,
-				"REVISA_CASE=picker",
-				"REVISA_SETTING=recado",
-				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
-				"REVISA_OFFERS=1",
-				"REVISA_MARKED=0",
-				"REVISA_SENT="+agents[0].ID)
-			if calls := stubCalls(t, stub); calls != 1 {
-				t.Fatalf("recado was called %d times", calls)
-			}
-			if got := stubArgv(t, stub, 1)[1]; got != agents[0].ID {
-				t.Errorf("sent to %q, want %q", got, agents[0].ID)
-			}
-		})
 	}
 }
 
@@ -312,8 +250,7 @@ func TestBufferSendWithoutALiveAgent(t *testing.T) {
 		"REVISA_SETTING=recado",
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
 		"REVISA_OFFERS=0",
-		"REVISA_MARKED=0",
-		"REVISA_ERROR=no live agent to notify")
+		"REVISA_ERROR=no recipient to notify")
 	assertNoSend(t, stub)
 }
 
@@ -344,17 +281,17 @@ func TestBufferSendReportsRecadoFailures(t *testing.T) {
 		},
 		"retries the picker": {
 			codes: []int{2, 0}, stderr: "recado: agent is busy",
-			sent: "match",
+			sent: "claude in ~/w/linked",
 		},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			p, _ := reviewProject(t)
+			p, home := homeProject(t)
 			linked := p.worktrees[1]
+			writeFile(t, linked, "src/a.lua", "anchor\n")
 			stub := recadoStub(t, agentsJSON(t,
 				stubAgent{ID: "match", Harness: "claude", Live: true,
 					Cwd: linked},
-				stubAgent{ID: "other", Harness: "pi", Live: true},
 			))
 			stubCodes(t, stub, c.codes...)
 			if c.stderr != "" {
@@ -364,11 +301,12 @@ func TestBufferSendReportsRecadoFailures(t *testing.T) {
 			picks := strings.TrimSuffix(
 				strings.Repeat("1,", len(c.codes)), ",")
 			sendCase(t, linked, stub,
+				"HOME="+home,
 				"REVISA_CASE=picker",
 				"REVISA_SETTING=recado",
 				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
 				"REVISA_OFFERS="+offers,
-				"REVISA_MARKED=1",
+				"REVISA_PANES=claude  ~/w/linked  feat/x",
 				"REVISA_PICK="+picks,
 				"REVISA_SENT="+c.sent,
 				"REVISA_ERROR="+c.want)
@@ -397,13 +335,13 @@ func TestBufferSendQuotesTheBranchInTheMessage(t *testing.T) {
 		"REVISA_SETTING=recado",
 		"REVISA_FILE="+filepath.Join(other, "src/a.lua"),
 		"REVISA_OFFERS=1",
-		"REVISA_MARKED=1",
-		"REVISA_SENT=match")
+		"REVISA_PANES=claude  "+other+"  feat/o'brien",
+		"REVISA_SENT=claude in "+other)
 	want := []string{
 		"send", "match",
 		`revisa: review comments are waiting on branch 'feat/o'\''brien'.` +
 			` Run: revisa list --branch 'feat/o'\''brien' --status open.` +
-			` Answer each with revisa resolve, not recado reply.`,
+			` Answer each with revisa resolve.`,
 		"--meta", "revisa_branch=feat/o'brien",
 	}
 	equalStrings(t, "argv", want, stubArgv(t, stub, 1))
@@ -428,8 +366,8 @@ func TestBufferSendChoosesTheWorktreeUnderReview(t *testing.T) {
 				"REVISA_FILE=" + file,
 				"REVISA_TARGET=feat/x",
 				"REVISA_OFFERS=1",
-				"REVISA_MARKED=1",
-				"REVISA_SENT=match",
+				"REVISA_PANES=claude  " + linked + "  feat/x",
+				"REVISA_SENT=claude in " + linked,
 			}
 			sendCase(t, p.worktrees[0], stub, env...)
 			equalStrings(t, "argv", wantArgv("match"),
@@ -468,8 +406,36 @@ func TestBufferSendRunsInTheExplicitWorktree(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(outside, "notes.txt"),
 		"REVISA_TARGET="+linked,
 		"REVISA_OFFERS=1",
-		"REVISA_MARKED=1",
-		"REVISA_SENT=match")
+		"REVISA_PANES=claude  "+linked+"  feat/x",
+		"REVISA_SENT=claude in "+linked)
 	equalStrings(t, "argv", wantArgv("match"),
 		stubArgv(t, stub, 1))
+}
+
+func TestBufferSendFallsBackToRecado(t *testing.T) {
+	cases := map[string]string{
+		"outside Rex": "",
+		"rex missing": "session:one",
+	}
+	for name, session := range cases {
+		t.Run(name, func(t *testing.T) {
+			p, home := homeProject(t)
+			linked := p.worktrees[1]
+			writeFile(t, linked, "src/a.lua", "anchor\n")
+			stub := recadoStub(t, agentsJSON(t,
+				stubAgent{ID: "match", Harness: "claude", Live: true,
+					Cwd: linked},
+			))
+			sendCase(t, linked, stub,
+				"HOME="+home,
+				"REX_SESSION="+session,
+				"REVISA_CASE=picker",
+				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+				"REVISA_SETTING=",
+				"REVISA_OFFERS=1",
+				"REVISA_PANES=claude  ~/w/linked  feat/x",
+				"REVISA_SENT=claude in ~/w/linked")
+			equalStrings(t, "argv", wantArgv("match"), stubArgv(t, stub, 1))
+		})
+	}
 }

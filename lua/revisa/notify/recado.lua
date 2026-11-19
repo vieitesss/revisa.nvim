@@ -1,6 +1,5 @@
 local M = {}
 local cli = require("revisa.cli")
-local notify = require("revisa.notify")
 
 -- untrusted holds the harnesses whose reported cwd cannot be matched on.
 local untrusted = { opencode = true }
@@ -34,17 +33,13 @@ local function cwd(agent)
     return agent.cwd
 end
 
--- label is one picker entry: the agent, its harness and where it works.
-local function label(agent)
-    local parts = { agent.id }
-    if type(agent.harness) == "string" and agent.harness ~= "" then
-        parts[#parts + 1] = agent.harness
+-- state names what recado reports about agent: busy while it works, idle
+-- when it waits, blank when it says something else.
+local function state(agent)
+    if agent.state == "busy" or agent.state == "idle" then
+        return agent.state
     end
-    local dir = cwd(agent)
-    if dir then
-        parts[#parts + 1] = dir
-    end
-    return table.concat(parts, "  ")
+    return nil
 end
 
 -- M.available reports whether recado can carry a message from here.
@@ -55,10 +50,10 @@ function M.available()
     return true
 end
 
--- M.targets lists the agents that can receive the message here. Only
+-- M.recipients lists the agents that can receive the message here. Only
 -- live agents on this machine are offered: remote agents, and Codex,
 -- which cannot receive these messages, are dropped.
-function M.targets(worktree)
+function M.recipients()
     local output, why = cli.exec({ "recado", "agents", "--json" }, {},
         "recado agents")
     if not output then
@@ -71,32 +66,26 @@ function M.targets(worktree)
             .. tostring(data))
         return nil
     end
-    local targets = {}
+    local recipients = {}
     for _, agent in ipairs(data.agents or {}) do
         if receivable(agent) then
-            targets[#targets + 1] = {
+            recipients[#recipients + 1] = {
                 id = agent.id,
-                label = label(agent),
+                harness = agent.harness,
                 cwd = cwd(agent),
+                state = state(agent),
             }
         end
     end
-    if #targets == 0 then
-        cli.error("revisa: no live agent to notify")
-        return nil
-    end
-    for _, found in ipairs(notify.matched(targets, worktree)) do
-        found.match = true
-    end
-    return targets
+    return recipients
 end
 
--- M.deliver carries the pointer to agent, one argument per word. Exit 2
--- means recado wants another agent, so the picker opens again.
-function M.deliver(agent, message, branch)
+-- M.deliver carries the pointer to recipient, one argument per word.
+-- Exit 2 means recado wants another agent, so the picker opens again.
+function M.deliver(recipient, message, branch)
     local ok, result = pcall(function()
         return vim.system({
-            "recado", "send", agent.id, message,
+            "recado", "send", recipient.id, message,
             "--meta", "revisa_branch=" .. branch,
         }, { env = { RECADO_ADDR = "revisa" } }):wait()
     end)
@@ -104,7 +93,6 @@ function M.deliver(agent, message, branch)
         return tostring(result)
     end
     if result.code == 0 then
-        vim.notify("revisa: sent to " .. agent.id, vim.log.levels.INFO)
         return nil
     end
     if result.code == 2 then

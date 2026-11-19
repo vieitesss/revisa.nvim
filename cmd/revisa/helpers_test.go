@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -29,13 +30,30 @@ type project struct {
 }
 
 func normalClone(t *testing.T) project {
-	root := t.TempDir()
+	t.Helper()
+	return cloneAt(t, t.TempDir())
+}
+
+func cloneAt(t *testing.T, root string) project {
+	t.Helper()
 	main := filepath.Join(root, "main")
 	git(t, root, "init", "-q", "-b", "main", main)
 	git(t, main, "commit", "-q", "--allow-empty", "-m", "init")
 	linked := filepath.Join(root, "linked")
 	git(t, main, "worktree", "add", "-q", "-b", "feat/x", linked)
 	return project{worktrees: []string{main, linked}}
+}
+
+// homeProject is normalClone inside a temporary home, so paths under it
+// show as ~ in the picker.
+func homeProject(t *testing.T) (project, string) {
+	t.Helper()
+	home := t.TempDir()
+	root := filepath.Join(home, "w")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return cloneAt(t, root), home
 }
 
 func bareRepo(t *testing.T) project {
@@ -50,6 +68,56 @@ func bareRepo(t *testing.T) project {
 	git(t, bare, "worktree", "add", "-q", a, "main")
 	git(t, bare, "worktree", "add", "-q", "-b", "feat/x", b)
 	return project{worktrees: []string{a, b}}
+}
+
+func notifierPath(t *testing.T, stubs ...string) string {
+	t.Helper()
+	gitBinary, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parts []string
+	for _, stub := range stubs {
+		if stub != "" {
+			parts = append(parts, stub)
+		}
+	}
+	parts = append(parts, filepath.Dir(revisa), filepath.Dir(gitBinary))
+	return strings.Join(parts, string(os.PathListSeparator))
+}
+
+func jsonList[T any](t *testing.T, key string, entries []T) string {
+	t.Helper()
+	if entries == nil {
+		entries = []T{}
+	}
+	data, err := json.Marshal(map[string]any{key: entries})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func equalStrings(t *testing.T, what string, want, got []string) {
+	t.Helper()
+	if len(want) != len(got) {
+		t.Fatalf("%s: got %q, want %q", what, got, want)
+	}
+	for i := range want {
+		if want[i] != got[i] {
+			t.Fatalf("%s: got %q, want %q", what, got, want)
+		}
+	}
+}
+
+func equalCommands(t *testing.T, what string, want, got [][]string) {
+	t.Helper()
+	if len(want) != len(got) {
+		t.Fatalf("%s: got %q, want %q", what, got, want)
+	}
+	for i := range want {
+		equalStrings(t, what+" "+strconv.Itoa(i+1), want[i], got[i])
+	}
 }
 
 func addMocks(t *testing.T, worktree string) {

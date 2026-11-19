@@ -4,12 +4,28 @@ local cli = require("revisa.cli")
 local review = require("revisa.review")
 local target = require("revisa.target")
 
-local settings = { notify = "none" }
-local allowed = { none = true, recado = true, rex = true }
+-- A notifier is one revisa.notify.<name> module:
+--
+--   available() -> ok, why
+--   recipients() -> list of { harness, cwd, state, location? }
+--     plus what deliver needs, or nil after reporting why it failed
+--   deliver(recipient, message, branch) -> nil, error text or "retry"
+--   confirm = true asks before typing into the recipient
+--
+-- A notifier never builds a label: this module finds each recipient's
+-- branch, aligns the columns, orders the list and names the recipient it
+-- sent to.
+
+local settings = { notify = "auto" }
+local allowed = { auto = true, none = true, recado = true, rex = true }
 
 local pickPrompt = "revisa: send the comments to"
 
-local matchSuffix = "  (matches this worktree)"
+local offHint = 'revisa: :Revisa send is off, setup({ notify = "auto" |'
+    .. ' "recado" | "rex" })'
+
+local noNotifier = "revisa: :Revisa send needs rex, with REX_SESSION set"
+    .. " and rex on PATH, or recado on PATH"
 
 function M.setup(options)
     local notify = options.notify
@@ -17,7 +33,7 @@ function M.setup(options)
         return
     end
     if not allowed[notify] then
-        cli.error("revisa: notify must be none, recado or rex, got "
+        cli.error("revisa: notify must be auto, none, recado or rex, got "
             .. tostring(notify))
         return
     end
@@ -32,81 +48,188 @@ local function message(branch)
     local quoted = shellQuote(branch)
     return "revisa: review comments are waiting on branch " .. quoted
         .. ". Run: revisa list --branch " .. quoted .. " --status open."
-        .. " Answer each with revisa resolve, not recado reply."
+        .. " Answer each with revisa resolve."
 end
 
-local function root(dir)
+-- git asks git in dir one question, nil when git cannot answer.
+local function git(dir, args)
+    local command = { "git", "-C", dir }
+    vim.list_extend(command, args)
     local ok, result = pcall(function()
-        return vim.system({
-            "git", "-C", dir, "rev-parse", "--show-toplevel",
-        }, { text = true }):wait()
+        return vim.system(command, { text = true }):wait()
     end)
     if not ok or result.code ~= 0 then
         return nil
     end
-    local top = vim.trim(result.stdout or "")
-    if top == "" then
+    local answer = vim.trim(result.stdout or "")
+    if answer == "" then
+        return nil
+    end
+    return answer
+end
+
+-- root is the worktree that holds dir, nil outside git.
+local function root(dir)
+    local top = git(dir, { "rev-parse", "--show-toplevel" })
+    if not top then
         return nil
     end
     return vim.uv.fs_realpath(top) or top
 end
 
--- M.matched returns the targets that work in worktree. A target's cwd is
--- resolved to the root of the worktree that holds it, so a subdirectory
--- of the worktree matches too.
-function M.matched(targets, worktree)
-    local want = vim.uv.fs_realpath(worktree) or worktree
-    local matches = {}
-    for _, candidate in ipairs(targets) do
-        local found = candidate.cwd and root(candidate.cwd)
-        if found and found == want then
-            matches[#matches + 1] = candidate
-        end
+-- project is the git common directory that holds dir, nil outside git.
+local function project(dir)
+    local common = git(dir, { "rev-parse", "--path-format=absolute",
+        "--git-common-dir" })
+    if not common then
+        return nil
     end
-    return matches
+    return vim.uv.fs_realpath(common) or common
 end
 
--- M.pick offers every target. The one target that works in the worktree
--- comes first and says so; several matches leave the list unmarked.
--- Cancelling picks nothing.
-function M.pick(targets, prompt, onChoice)
-    local matches = {}
-    for _, candidate in ipairs(targets) do
-        if candidate.match then
-            matches[#matches + 1] = candidate
+-- branch is the branch dir has checked out, nil outside git and when the
+-- branch is detached.
+local function branch(dir)
+    return git(dir, { "symbolic-ref", "--short", "-q", "HEAD" })
+end
+
+-- shorten shows dir with the home directory as ~.
+local function shorten(dir)
+    local home = vim.uv.os_homedir()
+    if not home or home == "" then
+        return dir
+    end
+    if dir == home then
+        return "~"
+    end
+    if dir:sub(1, #home + 1) == home .. "/" then
+        return "~" .. dir:sub(#home + 1)
+    end
+    return dir
+end
+
+-- order sorts recipients by how close they work to the worktree: in
+-- it first, then in its project, then in the Rex session the plugin runs
+-- in, then the rest.
+local function order(recipients, worktree)
+    local wanted = root(worktree)
+    local common = project(worktree)
+    local here = vim.env.REX_SESSION or ""
+    local function rank(recipient)
+        local dir = recipient.cwd
+        if dir and wanted and root(dir) == wanted then
+            return 1
+        end
+        if dir and common and project(dir) == common then
+            return 2
+        end
+        if here ~= "" and recipient.session == here then
+            return 3
+        end
+        return 4
+    end
+    local ranked = {}
+    for at, recipient in ipairs(recipients) do
+        ranked[at] = { at = at, rank = rank(recipient),
+            recipient = recipient }
+    end
+    table.sort(ranked, function(a, b)
+        if a.rank ~= b.rank then
+            return a.rank < b.rank
+        end
+        return a.at < b.at
+    end)
+    for at, entry in ipairs(ranked) do
+        recipients[at] = entry.recipient
+    end
+end
+
+-- labels returns one line per recipient: aligned columns for the
+-- harness, where it works, its branch, its state and its location, and
+-- no id. Columns are measured in display cells, not bytes.
+local function labels(recipients)
+    local rows = {}
+    for _, recipient in ipairs(recipients) do
+        local current = recipient.cwd and branch(recipient.cwd) or nil
+        rows[#rows + 1] = {
+            recipient.harness or "",
+            recipient.cwd and shorten(recipient.cwd) or "",
+            current or "",
+            recipient.state or "",
+            recipient.location,
+        }
+    end
+    local widths = {}
+    for _, row in ipairs(rows) do
+        for column = 1, 4 do
+            widths[column] = math.max(widths[column] or 0,
+                vim.fn.strdisplaywidth(row[column]))
         end
     end
-    local first = nil
-    if #matches == 1 then
-        first = matches[1]
-    end
-    local order, labels = {}, {}
-    if first then
-        order[1] = first
-        labels[1] = first.label .. matchSuffix
-    end
-    for _, candidate in ipairs(targets) do
-        if candidate ~= first then
-            order[#order + 1] = candidate
-            labels[#labels + 1] = candidate.label
+    local labels = {}
+    for _, row in ipairs(rows) do
+        local cells = {}
+        for column = 1, 4 do
+            cells[column] = row[column]
+                .. string.rep(" ", widths[column]
+                    - vim.fn.strdisplaywidth(row[column]))
         end
+        if row[5] then
+            cells[5] = "[" .. row[5] .. "]"
+        end
+        labels[#labels + 1] = (table.concat(cells, "  "):gsub("%s+$", ""))
     end
-    vim.ui.select(labels, { prompt = prompt }, function(_, index)
+    return labels
+end
+
+-- collect returns the notifier's recipients, ordered and labelled for
+-- the picker.
+local function collect(notifier, worktree)
+    local found = notifier.recipients()
+    if not found then
+        return nil
+    end
+    order(found, worktree)
+    local lines = labels(found)
+    for at, recipient in ipairs(found) do
+        recipient.label = lines[at]
+    end
+    return found
+end
+
+-- pick offers every recipient in order. Cancelling picks nothing.
+local function pick(recipients, onChoice)
+    local lines = {}
+    for at, recipient in ipairs(recipients) do
+        lines[at] = recipient.label
+    end
+    vim.ui.select(lines, { prompt = pickPrompt }, function(_, index)
         if index == nil then
             return
         end
-        onChoice(order[index])
+        onChoice(recipients[index])
     end)
 end
 
--- confirm shows what the target holds and asks before typing into it. Rex
--- types into whatever runs in the pane, so the pick stays explicit.
-local function confirm(target, preview, onChoice)
-    if preview ~= "" then
-        vim.notify(preview, vim.log.levels.INFO)
+-- recipientName names what runs in the recipient and where it sits,
+-- for both the confirm prompt and the "sent" notice.
+local function recipientName(recipient)
+    local where = recipient.location
+    if not where and recipient.cwd then
+        where = shorten(recipient.cwd)
     end
+    local name = recipient.harness or recipient.id
+    if where then
+        name = name .. " in " .. where
+    end
+    return name
+end
+
+-- confirm asks before typing into the recipient: rex types into whatever
+-- runs in the pane, so the pick stays explicit.
+local function confirm(recipient, onChoice)
     vim.ui.select({ "send", "cancel" }, {
-        prompt = "revisa: send to " .. target.label .. "?",
+        prompt = "revisa: send to " .. recipientName(recipient) .. "?",
     }, function(_, index)
         if index == 1 then
             onChoice()
@@ -114,41 +237,56 @@ local function confirm(target, preview, onChoice)
     end)
 end
 
-local function offer(notifier, targets, branch)
+local function offer(notifier, recipients, branch)
     local text = message(branch)
-    M.pick(targets, pickPrompt, function(chosen)
+    pick(recipients, function(chosen)
         local function deliver()
             local result = notifier.deliver(chosen, text, branch)
             if result == "retry" then
-                offer(notifier, targets, branch)
+                offer(notifier, recipients, branch)
                 return
             end
             if result then
                 cli.error(result)
+                return
             end
+            vim.notify("revisa: sent to " .. recipientName(chosen),
+                vim.log.levels.INFO)
         end
-        if not notifier.inspect then
-            deliver()
+        if notifier.confirm then
+            confirm(chosen, deliver)
             return
         end
-        local preview = notifier.inspect(chosen)
-        if preview == nil then
-            return
-        end
-        confirm(chosen, preview, deliver)
+        deliver()
     end)
 end
 
-function M.send(request)
-    local name = settings.notify
-    if name == "none" then
-        cli.error(
-            'revisa: :Revisa send needs setup({ notify = "recado" | "rex" })')
-        return
+-- chooseNotifier returns an available notifier: the named setting, or
+-- rex then recado for auto. Each notifier owns its availability rules.
+local function chooseNotifier()
+    if settings.notify == "none" then
+        return nil, offHint
     end
-    local notifier = require("revisa.notify." .. name)
+    if settings.notify == "auto" then
+        for _, name in ipairs({ "rex", "recado" }) do
+            local notifier = require("revisa.notify." .. name)
+            if notifier.available() then
+                return notifier
+            end
+        end
+        return nil, noNotifier
+    end
+    local notifier = require("revisa.notify." .. settings.notify)
     local ready, why = notifier.available()
     if not ready then
+        return nil, why
+    end
+    return notifier
+end
+
+function M.send(request)
+    local notifier, why = chooseNotifier()
+    if not notifier then
         cli.error(why)
         return
     end
@@ -171,15 +309,15 @@ function M.send(request)
         cli.error("revisa: " .. data.worktree .. " is not on a branch")
         return
     end
-    local targets = notifier.targets(data.worktree)
-    if not targets then
+    local recipients = collect(notifier, data.worktree)
+    if not recipients then
         return
     end
-    if #targets == 0 then
-        cli.error("revisa: no pane to notify")
+    if #recipients == 0 then
+        cli.error("revisa: no recipient to notify")
         return
     end
-    offer(notifier, targets, data.branch)
+    offer(notifier, recipients, data.branch)
 end
 
 return M

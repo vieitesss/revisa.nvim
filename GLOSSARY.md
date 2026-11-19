@@ -67,3 +67,11 @@ _Avoid_: Diff, changeset
 **Review target**:
 What one editor view shows of a project: a changes list, or one file version in a worktree. It decides where comments are drawn and which file version a new comment is stored against.
 _Avoid_: Context, buffer
+
+**Recipient**:
+A live agent that `:Revisa send` can tell that comments are waiting on a branch.
+_Avoid_: Target, destination
+
+**Notifier**:
+A way of reaching recipients, such as Rex or Recado. Each finds its own recipients and carries the message to them.
+_Avoid_: Carrier, channel, backend
