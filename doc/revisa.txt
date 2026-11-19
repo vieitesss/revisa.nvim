@@ -113,6 +113,8 @@ COMMANDS                                                      *revisa-commands*
     the outdated and unknown ones of the end block included. Each choice
     is labelled with its lines, or its condition, and its first body line.
 
+    Modified buffers are refused with "save the buffer before editing".
+
     Saving stores the new body with `revisa edit <id> --body <text>`. The
     anchor, status and reply stay. Saving an empty body or pressing q
     keeps the old body. A resolved comment can be edited while

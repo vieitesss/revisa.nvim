@@ -74,6 +74,9 @@ end
 -- else one picked from the file's comments.
 function M.edit()
     local buf = api.nvim_get_current_buf()
+    if refused(buf, "editing") then
+        return
+    end
     display.refresh(buf)
     -- refresh has already said why a buffer has no file target.
     local found = target.file(target.of(buf))
