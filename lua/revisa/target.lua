@@ -20,11 +20,6 @@ local function fromSession(session)
         kind = "changes",
         worktree = worktree,
         cwd = worktree,
-        branch = session.branch,
-        head = session.head,
-        base = session.base,
-        default_branch = session.default_branch,
-        entries_by_line = session.entries_by_line,
     }
 end
 
