@@ -49,7 +49,7 @@ local function message(branch)
     local quoted = shellQuote(branch)
     return "revisa: review comments are waiting on branch " .. quoted
         .. ". Run: revisa list --branch " .. quoted .. " --status open."
-        .. " Answer each with revisa resolve, not recado reply."
+        .. " Answer each with revisa resolve."
 end
 
 -- git asks git in dir one question, nil when git cannot answer.
@@ -211,9 +211,9 @@ local function pick(recipients, onChoice)
     end)
 end
 
--- sent names the recipient in the "sent" notice: what runs there, and
--- where it sits.
-local function sent(recipient)
+-- recipientName names what runs in the recipient and where it sits,
+-- for both the confirm prompt and the "sent" notice.
+local function recipientName(recipient)
     local where = recipient.location
     if not where and recipient.cwd then
         where = shorten(recipient.cwd)
@@ -222,14 +222,14 @@ local function sent(recipient)
     if where then
         name = name .. " in " .. where
     end
-    vim.notify("revisa: sent to " .. name, vim.log.levels.INFO)
+    return name
 end
 
 -- confirm asks before typing into the recipient: rex types into whatever
 -- runs in the pane, so the pick stays explicit.
 local function confirm(recipient, onChoice)
     vim.ui.select({ "send", "cancel" }, {
-        prompt = "revisa: send to " .. recipient.label .. "?",
+        prompt = "revisa: send to " .. recipientName(recipient) .. "?",
     }, function(_, index)
         if index == 1 then
             onChoice()
@@ -250,7 +250,8 @@ local function offer(notifier, recipients, branch)
                 cli.error(result)
                 return
             end
-            sent(chosen)
+            vim.notify("revisa: sent to " .. recipientName(chosen),
+                vim.log.levels.INFO)
         end
         if notifier.confirm then
             confirm(chosen, deliver)

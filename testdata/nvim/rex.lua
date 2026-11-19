@@ -20,7 +20,7 @@ end
 
 local function check_confirm(offer)
     assert(offer, "confirm did not open")
-    assert(offer.prompt:find("send to", 1, true), offer.prompt)
+    H.equal("revisa: send to " .. vim.env.REVISA_SENT .. "?", offer.prompt)
     H.equal({ "send", "cancel" }, offer.items)
 end
 
@@ -52,9 +52,7 @@ elseif case == "send" then
     H.equal(2, #offers)
     check_panes(offers[1])
     check_confirm(offers[2])
-    if (vim.env.REVISA_SENT or "") ~= "" then
-        check_sent()
-    end
+    check_sent()
 elseif case == "cancel" then
     H.open()
     vim.cmd("Revisa send")

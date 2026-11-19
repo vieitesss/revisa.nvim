@@ -364,7 +364,8 @@ func TestBufferRexCancelTypesNothing(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
 		"REVISA_PANES=claude  "+linked+
 			"  feat/x  busy  [revisa_nvim]",
-		"REVISA_PICK=1,cancel")
+		"REVISA_PICK=1,cancel",
+		"REVISA_SENT=claude in revisa_nvim")
 	if got := rexDelivery(t, stub); len(got) != 0 {
 		t.Errorf("cancel typed into the pane: %q", got)
 	}

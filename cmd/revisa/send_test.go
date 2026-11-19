@@ -146,7 +146,7 @@ func assertNoSend(t *testing.T, stub string) {
 
 const reviewMessage = "revisa: review comments are waiting on branch " +
 	"'feat/x'. Run: revisa list --branch 'feat/x' --status open." +
-	" Answer each with revisa resolve, not recado reply."
+	" Answer each with revisa resolve."
 
 func wantArgv(id string) []string {
 	return []string{
@@ -369,7 +369,7 @@ func TestBufferSendQuotesTheBranchInTheMessage(t *testing.T) {
 		"send", "match",
 		`revisa: review comments are waiting on branch 'feat/o'\''brien'.` +
 			` Run: revisa list --branch 'feat/o'\''brien' --status open.` +
-			` Answer each with revisa resolve, not recado reply.`,
+			` Answer each with revisa resolve.`,
 		"--meta", "revisa_branch=feat/o'brien",
 	}
 	equalStrings(t, "argv", want, stubArgv(t, stub, 1))
