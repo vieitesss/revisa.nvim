@@ -7,7 +7,7 @@ end
 -- wrap breaks one line of text into lines of at most width cells. A
 -- break goes after the last space that fits, else inside the word; the
 -- spaces at a break are dropped, and the leading indent is kept.
-function M.wrap(text, width)
+local function wrap(text, width)
     local out = {}
     local chars = vim.fn.split(text, "\\zs")
     while vim.fn.strdisplaywidth(table.concat(chars)) > width do
@@ -48,7 +48,7 @@ local function lines(text, group, width, prefix)
     local split = vim.split(text, "\n", { plain = true })
     split[1] = (prefix or "") .. split[1]
     for _, current in ipairs(split) do
-        for _, wrapped in ipairs(M.wrap(current, width)) do
+        for _, wrapped in ipairs(wrap(current, width)) do
             out[#out + 1] = line(wrapped, group)
         end
     end
@@ -102,9 +102,6 @@ end
 -- apply in order, and a comment with no current lines is hidden, never
 -- clamped to the file.
 function M.place(comment, target, line_count, with_resolved, width)
-    if not target or target.kind ~= "file" then
-        return hidden("not a file target")
-    end
     if comment.path ~= target.path then
         return hidden("another file")
     end
