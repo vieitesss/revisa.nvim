@@ -15,9 +15,6 @@ api.nvim_set_hl(0, "RevisaReply", { link = "DiagnosticOk", default = true })
 api.nvim_set_hl(0, "RevisaOutdated", {
     link = "DiagnosticWarn", default = true,
 })
-api.nvim_set_hl(0, "RevisaUnknown", {
-    link = "DiagnosticError", default = true,
-})
 api.nvim_set_hl(0, "RevisaWas", { link = "Comment", default = true })
 
 api.nvim_create_user_command("Revisa", function(command)
@@ -68,6 +65,23 @@ vim.keymap.set("n", "<Plug>(revisa-edit)", function()
 end)
 
 local group = api.nvim_create_augroup("revisa", { clear = true })
+api.nvim_create_autocmd({ "BufReadPre", "BufNewFile", "BufFilePost" }, {
+    group = group,
+    callback = function(event)
+        require("revisa.buffer").remember(
+            event.buf, event.event == "BufFilePost")
+    end,
+})
+for _, buf in ipairs(api.nvim_list_bufs()) do
+    if api.nvim_buf_is_loaded(buf)
+        and api.nvim_buf_get_name(buf) ~= ""
+        and vim.bo[buf].buftype == ""
+        and vim.b[buf].revisa_file == nil
+    then
+        require("revisa.buffer").remember(buf)
+    end
+end
+
 api.nvim_create_autocmd("BufReadPost", {
     group = group,
     callback = function(event)

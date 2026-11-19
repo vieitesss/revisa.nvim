@@ -111,8 +111,10 @@ COMMANDS                                                      *revisa-commands*
     anchored comment, that comment opens in the |revisa-editor|, holding
     its body; with several there, pick one with |vim.ui.select|. With the
     cursor on no comment, pick from every comment drawn in the buffer,
-    the outdated and unknown ones of the end block included. Each choice
-    is labelled with its lines, or its condition, and its first body line.
+    the outdated ones of the end block included. Each choice is labelled
+    with its lines, or its condition, and its first body line.
+
+    Modified buffers are refused with "save the buffer before editing".
 
     Saving stores the new body with `revisa edit <id> --body <text>`. The
     anchor, status and reply stay. Saving an empty body or pressing q
@@ -200,8 +202,9 @@ COMMANDS                                                      *revisa-commands*
     available reports why and sends nothing.
 
     [WORKTREE] is a path or a branch, as for |:Revisa-review|. Without it
-    the worktree is the changes buffer's, the diff view's, or the current
-    file's git worktree. The branch of that worktree goes in the message.
+    the worktree is the changes buffer's or the diff view's; a plain file
+    buffer has none, so the CLI names it from the directory it runs in (see
+    |revisa-projects|). The branch of that worktree goes in the message.
     An explicit path also runs the CLI there, as for |:Revisa-review|.
 
     |vim.ui.select| lists the recipients, one line each: >
@@ -310,12 +313,11 @@ appear inline too:
     - The full body, then the reply, as virtual lines below the last line.
       The first reply line starts with "reply: ".
 
-A comment the CLI reports as outdated or unknown has no current lines to
-draw on: an outdated one's anchor text is gone, an unknown one's branch is.
-It is not drawn on a guessed line. Instead one block of virtual lines is
-drawn below the last line, grouped by condition, with one empty line
-between groups. Each group starts with its heading and holds each
-comment's body and was: lines: >
+The plugin lists only the worktree's checked-out branch. Only outdated
+comments appear in the end block. An outdated comment has no current lines
+to draw on: its anchor text is gone. It is not drawn on a guessed line.
+Instead one block of virtual lines below the last line starts with a
+heading and holds each comment's body and was: lines: >
 
     outdated (2)
     Handle nil here
@@ -324,14 +326,13 @@ comment's body and was: lines: >
     Another body
     was: run(x)
 <
-A group of unknown comments reads the same, headed "unknown (1)" and using
-RevisaUnknown. While the block is not empty, the first line shows a
-right-aligned summary in RevisaOutdated: >
+While the block is not empty, the first line shows a right-aligned summary
+in RevisaOutdated: >
 
-    revisa: 2 outdated, 1 unknown
+    revisa: 2 outdated
 <
-A zero count is omitted. The block is virtual: it changes no buffer line
-and is not written by :write. |:Revisa-refresh| redraws it, and when the
+An empty block has no summary. The block is virtual: it changes no buffer
+line and is not written by :write. |:Revisa-refresh| redraws it, and when the
 anchor text comes back the comment returns to its line with no marker. The
 empty new side of a deleted file in the diff view shows the same block.
 
@@ -355,24 +356,28 @@ Highlight groups use default links, which users can override:
     RevisaResolved      DiagnosticSignOk                     *RevisaResolved*
     RevisaReply         DiagnosticOk                            *RevisaReply*
     RevisaOutdated      DiagnosticWarn                     *RevisaOutdated*
-    RevisaUnknown       DiagnosticError                     *RevisaUnknown*
     RevisaWas           Comment                                 *RevisaWas*
 
 ==============================================================================
 PROJECTS                                                      *revisa-projects*
 
-Inside git, the buffer's file path determines the worktree and project root.
-The CLI runs in that worktree and infers its branch. The comment path is
-relative to the git top level, not Neovim's working directory.
+Every review target carries the absolute path of its file, and the plugin
+hands it to the CLI: revisa add --path and revisa list --file take an
+absolute path. Only the CLI maps that path to the project and to the path a
+comment is stored under, relative to the project root. The plugin runs no
+git command to find either.
+
+The CLI runs in Neovim's current working directory when that contains the
+file, otherwise in the file's own directory. Inside git, the project root is
+the worktree's top level and the store is the project's, so the comment path
+is relative to the git top level, not Neovim's working directory. Outside
+git, the project root is the nearest ancestor of the run directory
+containing a .revisa/ directory, or the run directory itself when no store
+exists. An absolute path outside the project is refused.
 
 Comments belong to a branch, not a worktree path. The same file in another
-worktree of that branch reads the same comments through the CLI.
-
-Outside git, the CLI runs in Neovim's current working directory when the file
-is under it, otherwise in the file's own directory. The project root is the
-nearest ancestor of that run directory containing a .revisa/ directory, or the
-run directory itself when no store exists. Comment paths are relative to that
-root. The plugin never creates or opens the store directly.
+worktree of that branch reads the same comments through the CLI. The plugin
+never creates or opens the store directly.
 
 ==============================================================================
 SESSION CHANGES                                                *revisa-changes*

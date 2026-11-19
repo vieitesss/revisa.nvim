@@ -1,6 +1,7 @@
 package main_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -42,6 +43,108 @@ func TestBufferCommentsUseTheDisplayedFileVersion(t *testing.T) {
 				if got[i][field] != value {
 					t.Errorf("%s comment %d %s: got %#v, want %#v",
 						c.dir, i, field, got[i][field], value)
+				}
+			}
+		}
+	}
+}
+
+func TestBufferKeepsASymlinkedFilesPath(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "real.txt", "first\nsecond\n")
+	alias := filepath.Join(root, "alias.txt")
+	if err := os.Symlink("real.txt", alias); err != nil {
+		t.Fatal(err)
+	}
+	addOK(t, root, "--path", "alias.txt", "--lines", "1",
+		"--body", "Existing alias comment")
+	headless(t, root, "symlink.lua", "REVISA_FILE="+alias)
+	got := listJSON(t, root, "--file", alias)
+	if len(got) != 2 {
+		t.Fatalf("want 2 comments on alias.txt, got %v", got)
+	}
+	for _, c := range got {
+		if c["path"] != "alias.txt" {
+			t.Errorf("path: got %#v, want alias.txt", c["path"])
+		}
+	}
+}
+
+func TestBufferKeepsDirectorySymlinksLexical(t *testing.T) {
+	for _, kind := range []string{"git", "outside git"} {
+		for _, link := range []string{"internal", "external"} {
+			for _, input := range []string{
+				"relative", "absolute", "root alias",
+			} {
+				for _, load := range []string{"eager", "late"} {
+					name := kind + "/" + link + "/" + input + "/" + load
+					t.Run(name, func(t *testing.T) {
+						root := t.TempDir()
+						if kind == "git" {
+							root = normalClone(t).worktrees[1]
+						}
+						destination := filepath.Join(root, "src")
+						if link == "external" {
+							destination = t.TempDir()
+						}
+						writeFile(t, destination, "real.txt", "first\nsecond\n")
+						writeFile(t, destination, "renamed.txt", "renamed\n")
+						alias := filepath.Join(root, "alias-dir")
+						if err := os.Symlink(destination, alias); err != nil {
+							t.Fatal(err)
+						}
+						other := filepath.Join(root, "alias-b")
+						if err := os.Symlink(destination, other); err != nil {
+							t.Fatal(err)
+						}
+						path := "alias-dir/real.txt"
+						absolute := filepath.Join(realPath(t, root), path)
+						if input != "relative" {
+							base := root
+							if input == "root alias" {
+								base = filepath.Join(t.TempDir(), "project")
+								if err := os.Symlink(root, base); err != nil {
+									t.Fatal(err)
+								}
+							}
+							path = filepath.Join(base, path)
+							absolute = path
+						}
+						addOK(t, root, "--path", "alias-dir/real.txt",
+							"--lines", "1", "--body", "Existing alias comment")
+
+						headless(t, root, "directory-symlink.lua",
+							"REVISA_FILE="+path, "REVISA_ABSOLUTE="+absolute,
+							"REVISA_ROOT="+realPath(t, root),
+							"REVISA_PLUGIN_LOAD="+load)
+						got := listJSON(t, root, "--file", absolute)
+						if len(got) != 2 {
+							t.Fatalf("want 2 alias comments, got %v", got)
+						}
+						for _, c := range got {
+							if c["path"] != "alias-dir/real.txt" {
+								t.Errorf("unexpected path: %v", c["path"])
+							}
+						}
+						got = listJSON(t, root, "--file", "alias-b/real.txt")
+						if len(got) != 1 {
+							t.Fatalf("want 1 renamed alias comment, got %v",
+								got)
+						}
+						if got[0]["path"] != "alias-b/real.txt" ||
+							got[0]["body"] != "Renamed alias comment" {
+							t.Errorf("unexpected renamed alias comment: %v",
+								got)
+						}
+						if link == "external" {
+							store := filepath.Join(destination, ".revisa")
+							_, err := os.Stat(store)
+							if !os.IsNotExist(err) {
+								t.Errorf("outside store: want absent, got %v",
+									err)
+							}
+						}
+					})
 				}
 			}
 		}

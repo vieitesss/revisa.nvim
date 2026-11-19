@@ -51,7 +51,7 @@ func Locate(c store.Comment, source Source) (Result, error) {
 		if !errors.Is(err, ErrNoFile) && !errors.Is(err, ErrNoBranch) {
 			return Result{}, err
 		}
-		if c.Status == "open" {
+		if c.Status == store.Open {
 			stored.Condition = Outdated
 			if errors.Is(err, ErrNoBranch) {
 				stored.Condition = Unknown
@@ -62,7 +62,7 @@ func Locate(c store.Comment, source Source) (Result, error) {
 	anchorLines := strings.Split(c.AnchorText, "\n")
 	start := nearest(lines(content), anchorLines, c.LineStart)
 	if start == 0 {
-		if c.Status == "open" {
+		if c.Status == store.Open {
 			stored.Condition = Outdated
 		}
 		return stored, nil

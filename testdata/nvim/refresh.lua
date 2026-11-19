@@ -1,5 +1,11 @@
 local buf = H.open()
 H.equal({}, H.marks(buf))
+local found = require("revisa.display").refresh(buf)
+H.equal("file", found.kind)
+H.equal(vim.env.REVISA_FILE, found.absolute)
+H.equal(vim.uv.fs_realpath(vim.fs.dirname(vim.env.REVISA_FILE)), found.cwd)
+H.equal(nil, found.worktree)
+H.equal("new", found.side)
 local id = H.cli({
     "add", "--path", "src/a.lua", "--lines", "2", "--body", "External",
 })

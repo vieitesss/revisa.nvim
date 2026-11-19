@@ -5,7 +5,7 @@ vim.env.PATH = vim.env.REVISA_STUBS .. ":" .. vim.env.PATH
 require("revisa").setup({ notify = "recado" })
 local messages = H.notifications()
 
-for _, command in ipairs({ "refresh", "review", "send" }) do
+for _, command in ipairs({ "refresh", "edit", "review", "send" }) do
     local before = #messages
     vim.cmd("Revisa " .. command)
     H.equal(before + 1, #messages)

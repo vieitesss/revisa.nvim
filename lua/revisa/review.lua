@@ -86,9 +86,7 @@ local function draw(buf, data)
     vim.b[buf].revisa_session = {
         worktree = data.worktree,
         branch = data.branch,
-        head = data.head,
         base = data.base,
-        default_branch = data.default_branch,
         entries_by_line = entries_by_line,
     }
     api.nvim_win_set_cursor(0, { math.min(cursor, #lines), 0 })
