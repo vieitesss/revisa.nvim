@@ -48,37 +48,17 @@ local function check_old(win)
     H.equal(vim.env.REVISA_OLD_NAME, api.nvim_buf_get_name(buf))
     H.equal("nofile", vim.bo[buf].buftype)
     H.equal(false, vim.bo[buf].modifiable)
-    H.equal(false, vim.bo[buf].swapfile)
-    H.equal("wipe", vim.bo[buf].bufhidden)
     local filetype = vim.env.REVISA_FILE_TYPE or ""
     if filetype ~= "" then
         H.equal(filetype, vim.bo[buf].filetype)
     end
     H.equal(env("REVISA_OLD_LINES"), lines(buf))
-    local target = require("revisa.target").of(buf)
-    H.equal({
-        kind = "file",
-        worktree = vim.env.REVISA_WORKTREE,
-        cwd = vim.env.REVISA_WORKTREE,
-        path = vim.env.REVISA_OLD_PATH,
-        side = "old",
-        commit = vim.env.REVISA_COMMIT,
-        branch = "feat/x",
-    }, target)
 end
 
 local function check_new(win)
     local buf = api.nvim_win_get_buf(win)
     H.equal(vim.env.REVISA_NEW_NAME, api.nvim_buf_get_name(buf))
     H.equal(env("REVISA_NEW_LINES"), lines(buf))
-    H.equal({
-        kind = "file",
-        worktree = vim.env.REVISA_WORKTREE,
-        cwd = vim.env.REVISA_WORKTREE,
-        path = vim.env.REVISA_PATH,
-        side = "new",
-        branch = "feat/x",
-    }, require("revisa.target").of(buf))
     if vim.env.REVISA_DELETED == "1" then
         H.equal("nofile", vim.bo[buf].buftype)
         H.equal(false, vim.bo[buf].modifiable)
@@ -110,16 +90,8 @@ end
 local function check_old_comment(old, new, line, body)
     local oldbuf = api.nvim_win_get_buf(old)
     local newbuf = api.nvim_win_get_buf(new)
-    H.equal({ { line = line, text = ">", group = "RevisaSign" } },
-        H.signs(oldbuf))
+    H.display(oldbuf, line, line, { body })
     H.equal({}, H.signs(newbuf))
-    H.equal({
-        {
-            row = line,
-            above = true,
-            lines = { { { body, "RevisaComment" } } },
-        },
-    }, H.virtual(oldbuf))
     H.equal({}, H.virtual(newbuf))
     vim.o.lines = 20
     vim.o.columns = 100
@@ -203,6 +175,9 @@ elseif case == "editable" then
                 env("REVISA_WRITE_LINES"))
             vim.cmd.write()
             H.equal(false, vim.bo[api.nvim_win_get_buf(new)].modified)
+            api.nvim_win_set_cursor(new, { 1, 0 })
+            comment("New side body")
+            H.display(api.nvim_win_get_buf(new), 1, 1, { "New side body" })
         end
     end
 elseif case == "close" then

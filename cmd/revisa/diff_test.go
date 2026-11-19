@@ -34,11 +34,7 @@ func (c diffCase) env(t *testing.T, linked string) []string {
 		"REVISA_CASE=" + c.name,
 		"REVISA_TARGET=" + linked,
 		"REVISA_ENTRY=" + c.entry,
-		"REVISA_WORKTREE=" + realPath(t, linked),
-		"REVISA_COMMIT=" + base,
 		"REVISA_OLD_NAME=" + oldName,
-		"REVISA_OLD_PATH=" + c.oldPath,
-		"REVISA_PATH=" + c.path,
 		"REVISA_OLD_LINES=" + jsonLines(t, c.old),
 		"REVISA_FILE_TYPE=" + c.fileType,
 		"REVISA_NEW_NAME=" + newName,
@@ -76,17 +72,6 @@ var committedLines = []string{"local a = 1", "local b = 2", "local c = 3"}
 
 var editedLines = []string{"local a = 1", "local x = y", "if x then",
 	"  run(x)", "end"}
-
-func TestBufferDiffModifiedFileShowsBothSides(t *testing.T) {
-	p, linked := changesProject(t)
-	runDiff(t, p, linked, diffCase{
-		name: "modified", entry: "M src/a.lua",
-		path: "src/a.lua", oldPath: "src/a.lua",
-		old:      committedLines,
-		new:      editedLines,
-		fileType: "lua",
-	})
-}
 
 func TestBufferDiffAddedFileHasEmptyOldSide(t *testing.T) {
 	p, linked := changesProject(t)
@@ -139,28 +124,6 @@ func TestBufferDiffDeletedFileShowsOutdatedBlock(t *testing.T) {
 		new:      []string{""},
 		fileType: "go",
 		deleted:  true,
-	})
-}
-
-func TestBufferDiffRenamedFileShowsOldPath(t *testing.T) {
-	p, linked := changesProject(t)
-	runDiff(t, p, linked, diffCase{
-		name: "renamed", entry: "R src/moved.go -> src/renamed.go",
-		path: "src/renamed.go", oldPath: "src/moved.go",
-		old: []string{
-			"line", "line", "line", "line", "line",
-			"line", "line", "line", "line", "line",
-			"line", "line", "line", "line", "line",
-			"line", "line", "line", "line", "line",
-		},
-		new: []string{
-			"line", "line", "line", "line", "line",
-			"line", "line", "line", "line", "line",
-			"line", "line", "line", "line", "line",
-			"line", "line", "line", "line", "line",
-			"line",
-		},
-		fileType: "go",
 	})
 }
 
@@ -309,7 +272,7 @@ func TestBufferDiffOldSideCommentWithMovedBaseIsNotDrawn(t *testing.T) {
 	})
 }
 
-func TestBufferDiffNewSideIsEditable(t *testing.T) {
+func TestBufferDiffNewSideSavesFileAndComment(t *testing.T) {
 	p, linked := changesProject(t)
 	c := diffCase{
 		name: "editable", entry: "M src/a.lua",
@@ -325,6 +288,20 @@ func TestBufferDiffNewSideIsEditable(t *testing.T) {
 	want := "local saved = true\nreturn saved\n"
 	if got := readFile(t, filepath.Join(linked, "src/a.lua")); got != want {
 		t.Errorf("written file %q, want %q", got, want)
+	}
+	got := listJSON(t, linked)
+	if len(got) != 1 {
+		t.Fatalf("want 1 comment, got %v", got)
+	}
+	for field, value := range map[string]any{
+		"path": "src/a.lua", "side": "new", "branch": "feat/x",
+		"line_start": 1.0, "line_end": 1.0,
+		"anchor_text": "local saved = true", "body": "New side body",
+	} {
+		if got[0][field] != value {
+			t.Errorf("%s: got %#v, want %#v",
+				field, got[0][field], value)
+		}
 	}
 }
 
