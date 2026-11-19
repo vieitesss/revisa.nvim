@@ -7,9 +7,8 @@ local target = require("revisa.target")
 -- A notifier is one revisa.notify.<name> module:
 --
 --   available() -> ok, why
---   recipients(worktree) -> list of { harness, cwd, state, location? }
---     plus what deliver needs, or nil after reporting why it failed; a
---     notifier that does not filter by worktree ignores the argument
+--   recipients() -> list of { harness, cwd, state, location? }
+--     plus what deliver needs, or nil after reporting why it failed
 --   deliver(recipient, message, branch) -> nil, error text or "retry"
 --   confirm = true asks before typing into the recipient
 --
@@ -186,7 +185,7 @@ end
 -- collect returns the notifier's recipients, ordered and labelled for
 -- the picker.
 local function collect(notifier, worktree)
-    local found = notifier.recipients(worktree)
+    local found = notifier.recipients()
     if not found then
         return nil
     end
