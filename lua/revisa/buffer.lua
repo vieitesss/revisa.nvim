@@ -3,10 +3,10 @@ local uv = vim.uv
 
 -- Neovim resolves directory links in the full name, but keeps the lexical
 -- name in bufname() until a directory change. Save it while it is available.
-function M.remember(buf)
+function M.remember(buf, replace)
     local name = vim.api.nvim_buf_get_name(buf)
     local saved = vim.b[buf].revisa_file
-    if type(saved) == "table" and saved.name == name then
+    if not replace and type(saved) == "table" and saved.name == name then
         return
     end
     local path = vim.fn.bufname(buf)

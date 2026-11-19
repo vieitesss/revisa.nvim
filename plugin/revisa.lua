@@ -68,7 +68,8 @@ local group = api.nvim_create_augroup("revisa", { clear = true })
 api.nvim_create_autocmd({ "BufReadPre", "BufNewFile", "BufFilePost" }, {
     group = group,
     callback = function(event)
-        require("revisa.buffer").remember(event.buf)
+        require("revisa.buffer").remember(
+            event.buf, event.event == "BufFilePost")
     end,
 })
 for _, buf in ipairs(api.nvim_list_bufs()) do

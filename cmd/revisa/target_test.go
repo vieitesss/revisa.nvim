@@ -93,6 +93,10 @@ func TestBufferKeepsDirectorySymlinksLexical(t *testing.T) {
 						if err := os.Symlink(destination, alias); err != nil {
 							t.Fatal(err)
 						}
+						other := filepath.Join(root, "alias-b")
+						if err := os.Symlink(destination, other); err != nil {
+							t.Fatal(err)
+						}
 						path := "alias-dir/real.txt"
 						absolute := filepath.Join(realPath(t, root), path)
 						if input != "relative" {
@@ -121,6 +125,16 @@ func TestBufferKeepsDirectorySymlinksLexical(t *testing.T) {
 							if c["path"] != "alias-dir/real.txt" {
 								t.Errorf("unexpected path: %v", c["path"])
 							}
+						}
+						got = listJSON(t, root, "--file", "alias-b/real.txt")
+						if len(got) != 1 {
+							t.Fatalf("want 1 renamed alias comment, got %v",
+								got)
+						}
+						if got[0]["path"] != "alias-b/real.txt" ||
+							got[0]["body"] != "Renamed alias comment" {
+							t.Errorf("unexpected renamed alias comment: %v",
+								got)
 						}
 						if link == "external" {
 							store := filepath.Join(destination, ".revisa")

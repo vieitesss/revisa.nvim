@@ -45,8 +45,22 @@ local drawn = require("revisa.display").at(buf, 2)
 H.equal(1, #drawn)
 H.equal("New alias comment", drawn[1].comment.body)
 
--- A renamed buffer gets its new lexical name, not the saved old name.
+-- Renaming between aliases replaces the saved name, even for one file.
 local directory = vim.fs.dirname(absolute)
+local alias = vim.fs.dirname(directory) .. "/alias-b/real.txt"
+local full_name = vim.api.nvim_buf_get_name(buf)
+vim.cmd.file(vim.fn.fnameescape(alias))
+H.equal(full_name, vim.api.nvim_buf_get_name(buf))
+H.equal(alias, target.of(buf).absolute)
+vim.cmd("Revisa refresh")
+H.equal(0, #require("revisa.display").at(buf, 1))
+vim.cmd("1Revisa comment")
+editor = H.float()
+vim.api.nvim_buf_set_lines(editor, 0, -1, false, { "Renamed alias comment" })
+vim.cmd("write")
+H.display(buf, 1, 1, { "Renamed alias comment" })
+
+-- A renamed buffer gets its new lexical name, not the saved old name.
 local renamed = directory .. "/renamed.txt"
 vim.cmd.file(vim.fn.fnameescape(renamed))
 H.equal(renamed, target.of(buf).absolute)
