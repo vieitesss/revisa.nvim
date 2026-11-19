@@ -111,8 +111,10 @@ COMMANDS                                                      *revisa-commands*
     anchored comment, that comment opens in the |revisa-editor|, holding
     its body; with several there, pick one with |vim.ui.select|. With the
     cursor on no comment, pick from every comment drawn in the buffer,
-    the outdated and unknown ones of the end block included. Each choice
-    is labelled with its lines, or its condition, and its first body line.
+    the outdated ones of the end block included. Each choice is labelled
+    with its lines, or its condition, and its first body line.
+
+    Modified buffers are refused with "save the buffer before editing".
 
     Saving stores the new body with `revisa edit <id> --body <text>`. The
     anchor, status and reply stay. Saving an empty body or pressing q
@@ -310,12 +312,11 @@ appear inline too:
     - The full body, then the reply, as virtual lines below the last line.
       The first reply line starts with "reply: ".
 
-A comment the CLI reports as outdated or unknown has no current lines to
-draw on: an outdated one's anchor text is gone, an unknown one's branch is.
-It is not drawn on a guessed line. Instead one block of virtual lines is
-drawn below the last line, grouped by condition, with one empty line
-between groups. Each group starts with its heading and holds each
-comment's body and was: lines: >
+The plugin lists only the worktree's checked-out branch. Only outdated
+comments appear in the end block. An outdated comment has no current lines
+to draw on: its anchor text is gone. It is not drawn on a guessed line.
+Instead one block of virtual lines below the last line starts with a
+heading and holds each comment's body and was: lines: >
 
     outdated (2)
     Handle nil here
@@ -324,14 +325,13 @@ comment's body and was: lines: >
     Another body
     was: run(x)
 <
-A group of unknown comments reads the same, headed "unknown (1)" and using
-RevisaUnknown. While the block is not empty, the first line shows a
-right-aligned summary in RevisaOutdated: >
+While the block is not empty, the first line shows a right-aligned summary
+in RevisaOutdated: >
 
-    revisa: 2 outdated, 1 unknown
+    revisa: 2 outdated
 <
-A zero count is omitted. The block is virtual: it changes no buffer line
-and is not written by :write. |:Revisa-refresh| redraws it, and when the
+An empty block has no summary. The block is virtual: it changes no buffer
+line and is not written by :write. |:Revisa-refresh| redraws it, and when the
 anchor text comes back the comment returns to its line with no marker. The
 empty new side of a deleted file in the diff view shows the same block.
 
@@ -355,7 +355,6 @@ Highlight groups use default links, which users can override:
     RevisaResolved      DiagnosticSignOk                     *RevisaResolved*
     RevisaReply         DiagnosticOk                            *RevisaReply*
     RevisaOutdated      DiagnosticWarn                     *RevisaOutdated*
-    RevisaUnknown       DiagnosticError                     *RevisaUnknown*
     RevisaWas           Comment                                 *RevisaWas*
 
 ==============================================================================

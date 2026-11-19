@@ -15,9 +15,6 @@ api.nvim_set_hl(0, "RevisaReply", { link = "DiagnosticOk", default = true })
 api.nvim_set_hl(0, "RevisaOutdated", {
     link = "DiagnosticWarn", default = true,
 })
-api.nvim_set_hl(0, "RevisaUnknown", {
-    link = "DiagnosticError", default = true,
-})
 api.nvim_set_hl(0, "RevisaWas", { link = "Comment", default = true })
 
 api.nvim_create_user_command("Revisa", function(command)

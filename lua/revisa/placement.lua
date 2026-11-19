@@ -7,7 +7,7 @@ end
 -- wrap breaks one line of text into lines of at most width cells. A
 -- break goes after the last space that fits, else inside the word; the
 -- spaces at a break are dropped, and the leading indent is kept.
-function M.wrap(text, width)
+local function wrap(text, width)
     local out = {}
     local chars = vim.fn.split(text, "\\zs")
     while vim.fn.strdisplaywidth(table.concat(chars)) > width do
@@ -48,7 +48,7 @@ local function lines(text, group, width, prefix)
     local split = vim.split(text, "\n", { plain = true })
     split[1] = (prefix or "") .. split[1]
     for _, current in ipairs(split) do
-        for _, wrapped in ipairs(M.wrap(current, width)) do
+        for _, wrapped in ipairs(wrap(current, width)) do
             out[#out + 1] = line(wrapped, group)
         end
     end
@@ -97,13 +97,11 @@ local function anchored(comment, resolved, width)
 end
 
 -- place says where one comment goes in the file version target shows.
--- line_count is the buffer's line count, and width the cells a virtual
--- line may take. The rules apply in order, and a comment with no current
--- lines is hidden, never clamped to the file.
-function M.place(comment, target, line_count, show_resolved, width)
-    if not target or target.kind ~= "file" then
-        return hidden("not a file target")
-    end
+-- line_count is the buffer's line count, width the cells a virtual line may
+-- take, and with_resolved whether resolved comments are drawn. The rules
+-- apply in order, and a comment with no current lines is hidden, never
+-- clamped to the file.
+function M.place(comment, target, line_count, with_resolved, width)
     if comment.path ~= target.path then
         return hidden("another file")
     end
@@ -113,13 +111,12 @@ function M.place(comment, target, line_count, show_resolved, width)
     if target.side == "old" and comment.commit ~= target.commit then
         return hidden("another commit")
     end
-    if comment.status == "resolved" and not show_resolved then
+    if comment.status == "resolved" and not with_resolved then
         return hidden("resolved hidden")
     end
-    if comment.condition == "outdated" or comment.condition == "unknown" then
+    if comment.condition == "outdated" then
         return {
             kind = "marker",
-            condition = comment.condition,
             body = body_lines(comment, width),
             was = was_lines(comment, width),
         }
