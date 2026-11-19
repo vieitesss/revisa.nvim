@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -38,6 +39,23 @@ func normalClone(t *testing.T) project {
 	return project{worktrees: []string{main, linked}}
 }
 
+// homeProject is normalClone inside a temporary home, so paths under it
+// show as ~ in the picker.
+func homeProject(t *testing.T) (p project, home string) {
+	t.Helper()
+	home = t.TempDir()
+	root := filepath.Join(home, "w")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	main := filepath.Join(root, "main")
+	git(t, root, "init", "-q", "-b", "main", main)
+	git(t, main, "commit", "-q", "--allow-empty", "-m", "init")
+	linked := filepath.Join(root, "linked")
+	git(t, main, "worktree", "add", "-q", "-b", "feat/x", linked)
+	return project{worktrees: []string{main, linked}}, home
+}
+
 func bareRepo(t *testing.T) project {
 	root := t.TempDir()
 	seed := filepath.Join(root, "seed")
@@ -50,6 +68,16 @@ func bareRepo(t *testing.T) project {
 	git(t, bare, "worktree", "add", "-q", a, "main")
 	git(t, bare, "worktree", "add", "-q", "-b", "feat/x", b)
 	return project{worktrees: []string{a, b}}
+}
+
+func equalCommands(t *testing.T, what string, want, got [][]string) {
+	t.Helper()
+	if len(want) != len(got) {
+		t.Fatalf("%s: got %q, want %q", what, got, want)
+	}
+	for i := range want {
+		equalStrings(t, what+" "+strconv.Itoa(i+1), want[i], got[i])
+	}
 }
 
 func addMocks(t *testing.T, worktree string) {

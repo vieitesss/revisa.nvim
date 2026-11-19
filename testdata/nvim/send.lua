@@ -32,22 +32,18 @@ local function send(argument)
     vim.cmd(command)
 end
 
-local function check_offers(count, marked)
+local function check_offers(count)
     if count ~= #offers then
         error("want " .. count .. " pickers, got " .. #offers .. ": "
             .. vim.inspect(messages))
     end
+    local panes = vim.env.REVISA_PANES or ""
     for _, offer in ipairs(offers) do
         assert(offer.prompt:find("send", 1, true), offer.prompt)
         assert(#offer.items > 0, "empty picker")
-        local seen = 0
-        for position, item in ipairs(offer.items) do
-            if item:find("(matches this worktree)", 1, true) then
-                seen = seen + 1
-                H.equal(1, position)
-            end
+        if panes ~= "" then
+            H.equal(vim.split(panes, "\n", { plain = true }), offer.items)
         end
-        H.equal(marked, seen)
         for id in (vim.env.REVISA_ABSENT or ""):gmatch("[^,]+") do
             for _, item in ipairs(offer.items) do
                 assert(not item:find(id, 1, true),
@@ -81,25 +77,27 @@ if case == "unavailable" then
     H.equal(0, #offers)
     check_messages()
 elseif case == "invalid" then
-    H.error(messages, "none, recado or rex")
+    local first = messages[1]
+    assert(first, "no error notification")
+    H.equal(vim.log.levels.ERROR, first.level)
+    assert(first.message:find(vim.env.REVISA_ERROR, 1, true), first.message)
     send()
     H.equal(0, #offers)
-    check_messages()
+    assert(vim.env.RECADO_ADDR ~= "revisa", "RECADO_ADDR leaked into Neovim")
 elseif case == "picker" or case == "argument" then
     H.open()
     send(vim.env.REVISA_TARGET)
-    check_offers(tonumber(vim.env.REVISA_OFFERS),
-        tonumber(vim.env.REVISA_MARKED))
+    check_offers(tonumber(vim.env.REVISA_OFFERS))
     check_messages()
 elseif case == "cancel" then
     H.open()
     send()
-    check_offers(1, 1)
+    check_offers(1)
     H.equal(0, #messages)
 elseif case == "changes" then
     check_list()
     send()
-    check_offers(1, 1)
+    check_offers(1)
     check_messages()
 elseif case == "diff" then
     check_list()
@@ -117,7 +115,7 @@ elseif case == "diff" then
         return function()
             H.equal(true, vim.wo.diff)
             send()
-            check_offers(1, 1)
+            check_offers(1)
             check_messages()
         end
     end

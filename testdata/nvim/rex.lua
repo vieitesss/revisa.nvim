@@ -12,45 +12,20 @@ if setting ~= "" then
     require("revisa").setup({ notify = setting })
 end
 
-local function marked(offer)
-    local seen = 0
-    for position, item in ipairs(offer.items) do
-        if item:find("(matches this worktree)", 1, true) then
-            seen = seen + 1
-            H.equal(1, position)
-        end
-    end
-    return seen
+local function check_panes(offer)
+    assert(offer, "picker did not open")
+    H.equal(vim.split(vim.env.REVISA_PANES, "\n", { plain = true }),
+        offer.items)
 end
 
-local function check_panes(number, expected, matched)
-    local offer = offers[number]
-    assert(offer, "picker " .. number .. " did not open")
-    H.equal(vim.split(expected, "\n", { plain = true }), offer.items)
-    H.equal(matched, marked(offer))
-end
-
-local function check_preview(text)
-    for _, message in ipairs(messages) do
-        if message.message == text
-            and message.level == vim.log.levels.INFO then
-            return
-        end
-    end
-    error("no preview of the pane: " .. vim.inspect(messages))
-end
-
-local function check_confirm()
-    local offer = offers[#offers]
+local function check_confirm(offer)
+    assert(offer, "confirm did not open")
     assert(offer.prompt:find("send to", 1, true), offer.prompt)
     H.equal({ "send", "cancel" }, offer.items)
 end
 
 vim.ui.select = function(items, options, on_choice)
     offers[#offers + 1] = { items = items, prompt = options.prompt }
-    if #offers == 2 then
-        check_preview(vim.env.REVISA_PREVIEW)
-    end
     local pick = picks[#offers]
     if pick == nil or pick == "cancel" then
         on_choice(nil, nil)
@@ -58,6 +33,13 @@ vim.ui.select = function(items, options, on_choice)
     end
     local index = tonumber(pick)
     on_choice(items[index], index)
+end
+
+local function check_sent()
+    local last = messages[#messages]
+    assert(last, "no notification after send")
+    H.equal("revisa: sent to " .. vim.env.REVISA_SENT, last.message)
+    H.equal(vim.log.levels.INFO, last.level)
 end
 
 if case == "unavailable" then
@@ -68,16 +50,17 @@ elseif case == "send" then
     H.open()
     vim.cmd("Revisa send")
     H.equal(2, #offers)
-    check_panes(1, vim.env.REVISA_PANES, tonumber(vim.env.REVISA_MARKED))
-    check_confirm()
-    local last = messages[#messages]
-    H.equal("revisa: sent to block:01AGENT", last.message)
-    H.equal(vim.log.levels.INFO, last.level)
+    check_panes(offers[1])
+    check_confirm(offers[2])
+    if (vim.env.REVISA_SENT or "") ~= "" then
+        check_sent()
+    end
 elseif case == "cancel" then
     H.open()
     vim.cmd("Revisa send")
     H.equal(2, #offers)
-    check_confirm()
+    check_panes(offers[1])
+    check_confirm(offers[2])
     for _, message in ipairs(messages) do
         assert(not message.message:find("sent to", 1, true),
             "cancel sent: " .. message.message)
