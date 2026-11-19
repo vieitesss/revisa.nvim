@@ -44,11 +44,11 @@ func install(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("install: %w", err)
 	}
 	if err := installLink(filepath.Join(*binDir, "revisa"),
-		binary, stdout); err != nil {
+		binary, stdout, os.Symlink); err != nil {
 		return err
 	}
 	if err := installLink(filepath.Join(home, ".agents", "skills", "revisa"),
-		skill, stdout); err != nil {
+		skill, stdout, os.Symlink); err != nil {
 		return err
 	}
 	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
@@ -60,7 +60,8 @@ func install(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-func installLink(path, target string, stdout io.Writer) error {
+func installLink(path, target string, stdout io.Writer,
+	symlink func(oldname, newname string) error) error {
 	info, err := os.Lstat(path)
 	if err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
@@ -82,8 +83,21 @@ func installLink(path, target string, stdout io.Writer) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("install: %s: %w", path, err)
 	}
-	if err := os.Symlink(target, path); err != nil {
-		return fmt.Errorf("install: %s: %w", path, err)
+	if err := symlink(target, path); err != nil {
+		if !errors.Is(err, fs.ErrExist) {
+			return fmt.Errorf("install: %s: %w", path, err)
+		}
+		// Another instance linked the path between the Lstat above and
+		// this call. The same link means it did this work.
+		current, readErr := os.Readlink(path)
+		if readErr != nil {
+			return fmt.Errorf("install: %s: %w", path, readErr)
+		}
+		if current != target {
+			return fmt.Errorf("install: %s already exists", path)
+		}
+		fmt.Fprintf(stdout, "already linked %s -> %s\n", path, target)
+		return nil
 	}
 	fmt.Fprintf(stdout, "linked %s -> %s\n", path, target)
 	return nil
