@@ -194,7 +194,7 @@ func TestBufferSendListsRecipientsInOrder(t *testing.T) {
 	p, home := homeProject(t)
 	main, linked := p.worktrees[0], p.worktrees[1]
 	writeFile(t, linked, "src/a.lua", "anchor\n")
-	outside := filepath.Join(home, "outside")
+	outside := filepath.Join(home, "café")
 	if err := os.MkdirAll(outside, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestBufferSendListsRecipientsInOrder(t *testing.T) {
 			"claude    ~/w/linked/src  feat/x  idle",
 			"claude    ~/w/main        main    busy",
 			"aider",
-			"pi        ~/outside               idle",
+			"pi        ~/café                  idle",
 			"opencode                          busy",
 		}, "\n"),
 		"REVISA_ABSENT=gone",

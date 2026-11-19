@@ -147,7 +147,7 @@ end
 
 -- labels returns one line per recipient: aligned columns for the
 -- harness, where it works, its branch, its state and its location, and
--- no id.
+-- no id. Columns are measured in display cells, not bytes.
 local function labels(recipients)
     local rows = {}
     for _, recipient in ipairs(recipients) do
@@ -163,7 +163,8 @@ local function labels(recipients)
     local widths = {}
     for _, row in ipairs(rows) do
         for column = 1, 4 do
-            widths[column] = math.max(widths[column] or 0, #row[column])
+            widths[column] = math.max(widths[column] or 0,
+                vim.fn.strdisplaywidth(row[column]))
         end
     end
     local labels = {}
@@ -171,7 +172,8 @@ local function labels(recipients)
         local cells = {}
         for column = 1, 4 do
             cells[column] = row[column]
-                .. string.rep(" ", widths[column] - #row[column])
+                .. string.rep(" ", widths[column]
+                    - vim.fn.strdisplaywidth(row[column]))
         end
         if row[5] then
             cells[5] = "[" .. row[5] .. "]"
