@@ -97,10 +97,11 @@ local function anchored(comment, resolved, width)
 end
 
 -- place says where one comment goes in the file version target shows.
--- line_count is the buffer's line count, and width the cells a virtual
--- line may take. The rules apply in order, and a comment with no current
--- lines is hidden, never clamped to the file.
-function M.place(comment, target, line_count, show_resolved, width)
+-- line_count is the buffer's line count, width the cells a virtual line may
+-- take, and with_resolved whether resolved comments are drawn. The rules
+-- apply in order, and a comment with no current lines is hidden, never
+-- clamped to the file.
+function M.place(comment, target, line_count, with_resolved, width)
     if not target or target.kind ~= "file" then
         return hidden("not a file target")
     end
@@ -113,7 +114,7 @@ function M.place(comment, target, line_count, show_resolved, width)
     if target.side == "old" and comment.commit ~= target.commit then
         return hidden("another commit")
     end
-    if comment.status == "resolved" and not show_resolved then
+    if comment.status == "resolved" and not with_resolved then
         return hidden("resolved hidden")
     end
     if comment.condition == "outdated" or comment.condition == "unknown" then

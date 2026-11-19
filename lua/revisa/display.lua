@@ -1,8 +1,11 @@
 local M = {}
 local api = vim.api
+local cli = require("revisa.cli")
 local placement = require("revisa.placement")
+local targets = require("revisa.target")
 local namespace = api.nvim_create_namespace("revisa.comments")
 local drawn = {}
+local show_resolved = false
 
 local function width(buf)
     local cells = 80
@@ -32,7 +35,7 @@ local function hasAutoSignColumn(win)
 end
 
 -- buffers lists the loaded buffers this feature has drawn comments into.
-function M.buffers()
+local function buffers()
     local bufs = {}
     for buf in pairs(drawn) do
         if api.nvim_buf_is_loaded(buf) then
@@ -117,12 +120,12 @@ local function summary(counts)
     return "revisa: " .. table.concat(parts, ", ")
 end
 
-function M.draw(buf, target, comments, show_resolved, moved)
+-- draw draws one file version's comments into buf, replacing the last
+-- draw. moved overrides where a comment sits, for a redraw that follows
+-- lines moving under it. items remembers where each drawable comment went,
+-- so at can answer from what the window shows.
+local function draw(buf, target, comments, moved)
     api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
-    if not target or target.kind ~= "file" then
-        drawn[buf] = nil
-        return
-    end
     local count = api.nvim_buf_line_count(buf)
     moved = moved or {}
     local deleted = {}
@@ -139,6 +142,7 @@ function M.draw(buf, target, comments, show_resolved, moved)
     -- auto, so the cells a body may take are measured once they are there.
     local placed = {}
     local anchors = {}
+    local items = {}
     for _, comment in ipairs(comments) do
         local one = place(comment, where, moved)
         placed[#placed + 1] = one
@@ -147,11 +151,18 @@ function M.draw(buf, target, comments, show_resolved, moved)
             anchors[#anchors + 1] = {
                 comment = comment, first = first, last = last,
             }
+            items[#items + 1] = {
+                comment = comment,
+                first = one.line_start,
+                last = one.line_end,
+            }
+        elseif one.kind == "marker" then
+            items[#items + 1] = { comment = comment, last = count }
         end
     end
     drawn[buf] = {
-        target = target, comments = comments, show_resolved = show_resolved,
-        anchors = anchors, deleted = deleted,
+        target = target, comments = comments, anchors = anchors,
+        deleted = deleted, items = items,
     }
     -- A sign column that 'signcolumn' keeps hidden until a sign shows is
     -- laid out on the next redraw, so the bodies are wrapped after it.
@@ -194,6 +205,56 @@ function M.draw(buf, target, comments, show_resolved, moved)
     })
 end
 
+-- refresh draws buf's comments from the CLI: the file version the buffer
+-- shows, the comments stored for it, and where they sit now.
+function M.refresh(buf)
+    buf = buf or api.nvim_get_current_buf()
+    local found, err = targets.file(targets.of(buf))
+    if not found then
+        cli.error(err)
+        return
+    end
+    local comments = cli.json({ cwd = found.cwd }, { "list", "--json" })
+    if not comments then
+        return
+    end
+    draw(buf, found, comments)
+end
+
+-- at says which comments :Revisa edit may change on line: those drawn
+-- there, else every comment drawn in the buffer, each with the line the
+-- editor opens below it. It answers from the last draw, so it agrees with
+-- what the window shows.
+function M.at(buf, line)
+    local last = drawn[buf]
+    if not last then
+        return {}
+    end
+    local here, all = {}, {}
+    for _, item in ipairs(last.items) do
+        local one = {
+            comment = item.comment, first = item.first, last = item.last,
+        }
+        all[#all + 1] = one
+        if item.first and item.first <= line and line <= item.last then
+            here[#here + 1] = one
+        end
+    end
+    if #here > 0 then
+        return here
+    end
+    return all
+end
+
+-- toggle_resolved shows or hides resolved comments in every loaded buffer
+-- that has revisa marks.
+function M.toggle_resolved()
+    show_resolved = not show_resolved
+    for _, buf in ipairs(buffers()) do
+        M.refresh(buf)
+    end
+end
+
 local function row(buf, id, count)
     local mark = api.nvim_buf_get_extmark_by_id(buf, namespace, id,
         { details = true })
@@ -226,13 +287,13 @@ end
 -- size change. A comment deleted since the last draw stays hidden: only a
 -- refresh from the CLI gives it a line again.
 function M.redraw()
-    for _, buf in ipairs(M.buffers()) do
+    for _, buf in ipairs(buffers()) do
         local last = drawn[buf]
         local now = moved(buf, last.anchors)
         for comment in pairs(last.deleted) do
             now[comment] = { deleted = true }
         end
-        M.draw(buf, last.target, last.comments, last.show_resolved, now)
+        draw(buf, last.target, last.comments, now)
     end
 end
 

@@ -18,6 +18,22 @@ func TestBufferEditRefusesUnsavedSource(t *testing.T) {
 	}
 }
 
+func TestBufferEditPicksTheDrawnComment(t *testing.T) {
+	p, _ := reviewProject(t)
+	linked := p.worktrees[1]
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "2",
+		"--body", "First\nline")
+	addOK(t, linked, "--path", "src/a.lua", "--lines", "3-4",
+		"--body", "Second")
+	headless(t, p.worktrees[0], "edit-moved.lua",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"))
+	got := listJSON(t, linked)
+	if len(got) != 2 || got[0]["body"] != "First\nline" ||
+		got[1]["body"] != "Second" {
+		t.Errorf("got %v", got)
+	}
+}
+
 func TestEditReplacesBodyOnly(t *testing.T) {
 	p, _ := reviewProject(t)
 	wt := p.worktrees[1]

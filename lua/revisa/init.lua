@@ -2,10 +2,7 @@ local M = {}
 local api = vim.api
 local cli = require("revisa.cli")
 local display = require("revisa.display")
-local placement = require("revisa.placement")
 local target = require("revisa.target")
-
-local show_resolved = false
 
 local function refused(buf, what)
     if not vim.bo[buf].modified then
@@ -27,26 +24,13 @@ local function addArgs(found, lines)
 end
 
 function M.refresh(buf)
-    buf = buf or api.nvim_get_current_buf()
-    local found, err = target.file(target.of(buf))
-    if not found then
-        cli.error(err)
-        return
-    end
-    local comments = cli.json({ cwd = found.cwd }, { "list", "--json" })
-    if not comments then
-        return
-    end
-    display.draw(buf, found, comments, show_resolved)
+    display.refresh(buf)
 end
 
 -- toggle_resolved shows or hides resolved comments in every loaded buffer
 -- that has revisa marks.
 function M.toggle_resolved()
-    show_resolved = not show_resolved
-    for _, buf in ipairs(display.buffers()) do
-        M.refresh(buf)
-    end
+    display.toggle_resolved()
 end
 
 function M.comment(first, last)
@@ -75,52 +59,29 @@ function M.comment(first, last)
     end)
 end
 
-local function editable(buf, found, comments, line)
-    local count = api.nvim_buf_line_count(buf)
-    local here, all = {}, {}
-    for _, comment in ipairs(comments) do
-        local placed = placement.place(comment, found, count, show_resolved,
-            80)
-        if placed.kind == "anchored" then
-            local item = { comment = comment, last = placed.line_end }
-            all[#all + 1] = item
-            if placed.line_start <= line and line <= placed.line_end then
-                here[#here + 1] = item
-            end
-        elseif placed.kind == "marker" then
-            all[#all + 1] = { comment = comment, last = count }
-        end
-    end
-    return #here > 0 and here or all
-end
-
 local function label(item)
-    local comment = item.comment
-    local where = comment.condition
-    if type(comment.line_start) == "number" then
-        where = "line " .. comment.line_start
-        if comment.line_end ~= comment.line_start then
-            where = "lines " .. comment.line_start .. "-" .. comment.line_end
+    local where = item.comment.condition
+    if item.first then
+        where = "line " .. item.first
+        if item.last ~= item.first then
+            where = "lines " .. item.first .. "-" .. item.last
         end
     end
-    return where .. ": " .. vim.split(comment.body, "\n")[1]
+    return where .. ": " .. vim.split(item.comment.body, "\n")[1]
 end
 
 -- edit changes the body of a drawn comment: the one on the cursor line,
 -- else one picked from the file's comments.
 function M.edit()
     local buf = api.nvim_get_current_buf()
-    local found, err = target.file(target.of(buf))
+    display.refresh(buf)
+    -- refresh has already said why a buffer has no file target.
+    local found = target.file(target.of(buf))
     if not found then
-        cli.error(err)
-        return
-    end
-    local comments = cli.json({ cwd = found.cwd }, { "list", "--json" })
-    if not comments then
         return
     end
     local line = api.nvim_win_get_cursor(0)[1]
-    local items = editable(buf, found, comments, line)
+    local items = display.at(buf, line)
     local function open(item)
         if not item then
             return
@@ -134,7 +95,7 @@ function M.edit()
             if result == nil then
                 return false
             end
-            M.refresh(buf)
+            display.refresh(buf)
             return true
         end, item.comment.body)
     end

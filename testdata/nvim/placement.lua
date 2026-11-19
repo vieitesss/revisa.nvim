@@ -1,117 +1,143 @@
 local api = vim.api
-local display = require("revisa.display")
-local buf = api.nvim_create_buf(false, true)
 
-local function comment(fields)
-    return vim.tbl_extend("force", {
-        path = "a.txt",
-        side = "new",
-        status = "open",
-        line_start = 2,
-        line_end = 3,
-        anchor_text = "local x = y",
-        body = "Handle nil",
-    }, fields or {})
+local function open(path)
+    vim.cmd.edit(vim.fn.fnameescape(path))
+    return api.nvim_get_current_buf()
 end
 
-local newSide = { kind = "file", path = "a.txt", side = "new" }
-local oldSide = {
-    kind = "file", path = "a.txt", side = "old", commit = "base",
-}
-
-local cases = {
-    { want = "open" },
-    { comment = { status = "resolved", reply = "Fixed" }, want = "hidden" },
-    {
-        comment = { status = "resolved", reply = "Fixed" },
-        show = true,
-        want = "resolved",
-    },
-    { comment = { condition = "outdated" }, count = 2, want = "outdated" },
-    { comment = { line_end = 9 }, want = "hidden" },
-    { target = oldSide, want = "hidden" },
-    {
-        comment = { side = "old", commit = "base" },
-        target = oldSide,
-        want = "open",
-    },
-    {
-        comment = { side = "old", commit = "head" },
-        target = oldSide,
-        want = "hidden",
-    },
-    { target = { kind = "changes" }, want = "hidden" },
-    { comment = { path = "b.txt" }, want = "hidden" },
-}
-
-for _, case in ipairs(cases) do
-    api.nvim_buf_set_lines(buf, 0, -1, false,
-        case.count == 2 and { "one", "two" }
-            or { "one", "two", "three", "four", "five" })
-    display.draw(buf, case.target or newSide, { comment(case.comment) },
-        case.show)
-    if case.want == "open" then
-        H.display(buf, 2, 3, { "Handle nil" })
-    elseif case.want == "resolved" then
-        H.resolved(buf, 2, 3, {
-            { "Handle nil", "RevisaComment" },
-            { "reply: Fixed", "RevisaReply" },
-        })
-    elseif case.want == "outdated" then
-        H.equal({}, H.signs(buf))
-        H.equal({
-            {
-                row = 2,
-                above = true,
-                lines = {
-                    { { "outdated (1)", "RevisaOutdated" } },
-                    { { "Handle nil", "RevisaComment" } },
-                    { { "was: local x = y", "RevisaWas" } },
-                },
-            },
-        }, H.virtual(buf))
-    else
-        H.equal({}, H.signs(buf))
-        H.equal({}, H.virtual(buf))
-        H.equal(nil, H.text(buf))
+-- Where each drawn body starts, by the file line it sits under.
+local function bodies(buf)
+    local out = {}
+    for _, mark in ipairs(H.marks(buf)) do
+        local details = mark[4]
+        if details.virt_lines then
+            local text = {}
+            for _, line in ipairs(details.virt_lines) do
+                text[#text + 1] = line[1][1]
+            end
+            out[mark[2] + (details.virt_lines_above and 1 or 0)] = text
+        end
     end
+    return out
 end
 
-api.nvim_buf_set_lines(buf, 0, -1, false, { "one", "two", "three" })
-local win = api.nvim_open_win(buf, true, {
-    relative = "editor", row = 0, col = 0, width = 20, height = 6,
+-- one open comment on lines 2-3; the resolved, old-side and other-file
+-- comments stay hidden
+local buf = open(vim.env.REVISA_FILE)
+H.display(buf, 2, 3, { "Handle nil" })
+
+require("revisa").toggle_resolved()
+H.equal({
+    { line = 2, text = ">", group = "RevisaSign" },
+    { line = 3, text = ">", group = "RevisaSign" },
+    { line = 4, text = "✓", group = "RevisaResolved" },
+    { line = 5, text = "✓", group = "RevisaResolved" },
+}, H.signs(buf))
+H.equal({
+    {
+        row = 3,
+        above = true,
+        lines = { { { "Handle nil", "RevisaComment" } } },
+    },
+    {
+        row = 5,
+        above = true,
+        lines = {
+            { { "Resolved body", "RevisaComment" } },
+            { { "reply: Fixed", "RevisaReply" } },
+        },
+    },
+}, H.virtual(buf))
+H.equal(nil, H.text(buf))
+
+-- a comment whose lines the shortened buffer no longer has is hidden
+api.nvim_buf_set_lines(buf, 3, -1, false, {})
+H.equal(3, api.nvim_buf_line_count(buf))
+require("revisa").refresh(buf)
+H.display(buf, 2, 3, { "Handle nil" })
+
+-- the old side of the base commit draws only its own comments
+local lines = vim.split(vim.fn.system({ "git", "-C", vim.fn.getcwd(),
+    "show", vim.env.REVISA_BASE .. ":src/a.lua" }), "\n", { plain = true })
+if lines[#lines] == "" then
+    table.remove(lines)
+end
+local old = api.nvim_create_buf(false, true)
+vim.bo[old].swapfile = false
+api.nvim_buf_set_name(old, "revisa://old/src/a.lua")
+api.nvim_buf_set_lines(old, 0, -1, false, lines)
+vim.b[old].revisa_target = {
+    name = api.nvim_buf_get_name(old),
+    worktree = vim.fn.getcwd(),
+    path = "src/a.lua",
+    side = "old",
+    commit = vim.env.REVISA_BASE,
+}
+require("revisa.display").refresh(old)
+H.equal({ { line = 2, text = ">", group = "RevisaSign" } }, H.signs(old))
+H.equal({
+    {
+        row = 2,
+        above = true,
+        lines = { { { "Old side body", "RevisaComment" } } },
+    },
+}, H.virtual(old))
+H.equal(nil, H.text(old))
+
+-- a comment whose anchor text is gone draws in the end block
+local gone = open(vim.env.REVISA_OUTDATED)
+H.equal({}, H.signs(gone))
+H.equal({
+    {
+        row = 2,
+        above = true,
+        lines = {
+            { { "outdated (1)", "RevisaOutdated" } },
+            { { "Gone line", "RevisaComment" } },
+            { { "was: not here", "RevisaWas" } },
+        },
+    },
+}, H.virtual(gone))
+H.equal({ { "revisa: 1 outdated", "RevisaOutdated" } }, H.text(gone))
+
+-- a non-file target draws nothing and says why
+local messages = H.notifications()
+local changes = api.nvim_create_buf(false, true)
+vim.b[changes].revisa_session = {
+    worktree = vim.fn.getcwd(), entries_by_line = {},
+}
+require("revisa.display").refresh(changes)
+H.error(messages, "comments require a real file buffer")
+H.equal({}, H.marks(changes))
+
+-- bodies wrap to the cells a 20 column window leaves
+local wrap = open(vim.env.REVISA_WRAP)
+local win = api.nvim_open_win(wrap, true, {
+    relative = "editor", row = 0, col = 0, width = 20, height = 9,
     style = "minimal",
 })
 vim.wo[win].signcolumn = "no"
-for _, case in ipairs({
-    { "before\n\nafter", { "before", "", "after" } },
-    { "short", { "short" } },
-    { "aaaa bbbb cccc dddd eeee", { "aaaa bbbb cccc dddd", "eeee" } },
-    { "    local value = f(a, b)", { "    local value =", "f(a, b)" } },
-    { "abcdefghijklmnopqrstuvwxyz", { "abcdefghijklmnopqrst", "uvwxyz" } },
-    { "one  two   three  four five", { "one  two   three", "four five" } },
-    { "ñandú ñandú ñandú ñandú", { "ñandú ñandú ñandú", "ñandú" } },
-}) do
-    display.draw(buf, newSide, { comment({ body = case[1] }) }, false)
-    H.display(buf, 2, 3, case[2])
-end
+require("revisa").refresh(wrap)
+H.equal({
+    [2] = { "before", "", "after" },
+    [3] = { "short" },
+    [4] = { "aaaa bbbb cccc dddd", "eeee" },
+    [5] = { "    local value =", "f(a, b)" },
+    [6] = { "abcdefghijklmnopqrst", "uvwxyz" },
+    [7] = { "one  two   three", "four five" },
+    [8] = { "ñandú ñandú ñandú", "ñandú" },
+    [10] = { "first second third", "fourth fifth", "reply: done here",
+        "with more details" },
+}, bodies(wrap))
 
-display.draw(buf, newSide, { comment({
-    status = "resolved",
-    body = "first second third fourth fifth",
-    reply = "done here with more details",
-}) }, true)
-H.resolved(buf, 2, 3, {
-    { "first second third", "RevisaComment" },
-    { "fourth fifth", "RevisaComment" },
-    { "reply: done here", "RevisaReply" },
-    { "with more details", "RevisaReply" },
+-- the was: lines of an end block comment wrap too
+local long = open(vim.env.REVISA_OUTDATED_LONG)
+local also = api.nvim_open_win(long, true, {
+    relative = "editor", row = 0, col = 0, width = 20, height = 6,
+    style = "minimal",
 })
-display.draw(buf, newSide, { comment({
-    condition = "outdated",
-    body = "Gone line",
-    anchor_text = "local value = something",
-}) }, false)
+vim.wo[also].signcolumn = "no"
+require("revisa").refresh(long)
 H.equal({
     {
         row = 3,
@@ -123,5 +149,6 @@ H.equal({
             { { "something", "RevisaWas" } },
         },
     },
-}, H.virtual(buf))
+}, H.virtual(long))
+api.nvim_win_close(also, true)
 api.nvim_win_close(win, true)

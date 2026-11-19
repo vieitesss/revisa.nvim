@@ -1,31 +1,5 @@
 local api = vim.api
-
-local buf = api.nvim_create_buf(false, true)
-api.nvim_buf_set_lines(buf, 0, -1, false, { "one", "two" })
-local target = { kind = "file", path = "a.txt", side = "new" }
-
-require("revisa.display").draw(buf, target, {
-    {
-        path = "a.txt",
-        side = "new",
-        status = "open",
-        condition = "unknown",
-        line_start = nil,
-        line_end = nil,
-        anchor_text = "one\ntwo",
-        body = "The branch is gone",
-    },
-    {
-        path = "a.txt",
-        side = "new",
-        status = "open",
-        condition = "outdated",
-        line_start = nil,
-        line_end = nil,
-        anchor_text = "three",
-        body = "Gone line",
-    },
-}, false)
+local buf = H.open()
 
 H.equal({}, H.signs(buf))
 H.equal({
@@ -47,7 +21,6 @@ H.equal({
 H.equal({ { "revisa: 1 outdated, 1 unknown", "RevisaOutdated" } },
     H.text(buf))
 
-api.nvim_win_set_buf(0, buf)
 vim.o.lines = 20
 vim.o.columns = 80
 local rows = H.screen()
