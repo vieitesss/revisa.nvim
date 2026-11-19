@@ -39,6 +39,22 @@ func clone(t *testing.T) (main, linked string) {
 	return main, linked
 }
 
+// bareRepo makes a bare repository with worktrees on main and feat/x.
+func bareRepo(t *testing.T) (main, linked string) {
+	t.Helper()
+	root := t.TempDir()
+	seed := filepath.Join(root, "seed")
+	gitAt(t, root, "init", "-q", "-b", "main", seed)
+	gitAt(t, seed, "commit", "-q", "--allow-empty", "-m", "init")
+	bare := filepath.Join(root, "repo.git")
+	gitAt(t, root, "clone", "-q", "--bare", seed, bare)
+	main = filepath.Join(root, "a")
+	gitAt(t, bare, "worktree", "add", "-q", main, "main")
+	linked = filepath.Join(root, "b")
+	gitAt(t, bare, "worktree", "add", "-q", "-b", "feat/x", linked)
+	return main, linked
+}
+
 // writeFile writes path under dir, creating its directories.
 func writeFile(t *testing.T, dir, path, content string) {
 	t.Helper()
