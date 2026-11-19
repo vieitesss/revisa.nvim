@@ -140,7 +140,7 @@ func list(args []string, stdout, stderr io.Writer) error {
 	status := fl.String("status", "",
 		"only comments with this status: open or resolved")
 	file := fl.String("file", "",
-		"only comments on this file, absolute or from the root")
+		"only comments on this file, absolute or relative to the root")
 	asJSON := fl.Bool("json", false, "print every field as JSON")
 	positional, err := parse(fl, args)
 	if err != nil {

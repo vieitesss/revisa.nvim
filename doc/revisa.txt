@@ -202,8 +202,9 @@ COMMANDS                                                      *revisa-commands*
     available reports why and sends nothing.
 
     [WORKTREE] is a path or a branch, as for |:Revisa-review|. Without it
-    the worktree is the changes buffer's, the diff view's, or the current
-    file's git worktree. The branch of that worktree goes in the message.
+    the worktree is the changes buffer's or the diff view's; a plain file
+    buffer has none, so the CLI names it from the directory it runs in (see
+    |revisa-projects|). The branch of that worktree goes in the message.
     An explicit path also runs the CLI there, as for |:Revisa-review|.
 
     |vim.ui.select| lists the recipients, one line each: >
@@ -360,18 +361,23 @@ Highlight groups use default links, which users can override:
 ==============================================================================
 PROJECTS                                                      *revisa-projects*
 
-Inside git, the buffer's file path determines the worktree and project root.
-The CLI runs in that worktree and infers its branch. The comment path is
-relative to the git top level, not Neovim's working directory.
+Every review target carries the absolute path of its file, and the plugin
+hands it to the CLI: revisa add --path and revisa list --file take an
+absolute path. Only the CLI maps that path to the project and to the path a
+comment is stored under, relative to the project root. The plugin runs no
+git command to find either.
+
+The CLI runs in Neovim's current working directory when that contains the
+file, otherwise in the file's own directory. Inside git, the project root is
+the worktree's top level and the store is the project's, so the comment path
+is relative to the git top level, not Neovim's working directory. Outside
+git, the project root is the nearest ancestor of the run directory
+containing a .revisa/ directory, or the run directory itself when no store
+exists. An absolute path outside the project is refused.
 
 Comments belong to a branch, not a worktree path. The same file in another
-worktree of that branch reads the same comments through the CLI.
-
-Outside git, the CLI runs in Neovim's current working directory when the file
-is under it, otherwise in the file's own directory. The project root is the
-nearest ancestor of that run directory containing a .revisa/ directory, or the
-run directory itself when no store exists. Comment paths are relative to that
-root. The plugin never creates or opens the store directly.
+worktree of that branch reads the same comments through the CLI. The plugin
+never creates or opens the store directly.
 
 ==============================================================================
 SESSION CHANGES                                                *revisa-changes*
