@@ -12,6 +12,12 @@ import (
 	"sort"
 )
 
+// Comment statuses, stored as their string values in the file format.
+const (
+	Open     = "open"
+	Resolved = "resolved"
+)
+
 // Comment is one reviewer remark, stored as <id>.json.
 type Comment struct {
 	ID         string  `json:"id"`

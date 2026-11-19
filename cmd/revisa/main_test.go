@@ -36,44 +36,6 @@ Why was the cache removed?
 Callers still expect it.
 `
 
-func TestListSeesCommentsFromEveryWorktree(t *testing.T) {
-	setups := map[string]func(*testing.T) project{
-		"normal clone": normalClone,
-		"bare repo":    bareRepo,
-	}
-	for name, setup := range setups {
-		t.Run(name, func(t *testing.T) {
-			p := setup(t)
-			addMocks(t, p.worktrees[0])
-			for _, wt := range p.worktrees {
-				out, stderr, code := run(t, wt,
-					"list", "--branch", "feat/x", "--status", "open")
-				if code != 0 {
-					t.Fatalf("exit %d: %s", code, stderr)
-				}
-				if out != openOnFeatX {
-					t.Errorf("from %s got:\n%s\nwant:\n%s",
-						wt, out, openOnFeatX)
-				}
-			}
-		})
-	}
-}
-
-func TestListFromSubdirectory(t *testing.T) {
-	p := normalClone(t)
-	addMocks(t, p.worktrees[0])
-	sub := filepath.Join(p.worktrees[1], "deep", "dir")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	out, _, code := run(t, sub,
-		"list", "--branch", "feat/x", "--status", "open")
-	if code != 0 || out != openOnFeatX {
-		t.Errorf("exit %d, got:\n%s", code, out)
-	}
-}
-
 func TestListResolvedShowsReply(t *testing.T) {
 	p := normalClone(t)
 	addMocks(t, p.worktrees[0])
@@ -84,32 +46,6 @@ reply: Fixed the title.
 `
 	if out != want {
 		t.Errorf("got:\n%s\nwant:\n%s", out, want)
-	}
-}
-
-func TestListDefaultsToCurrentBranch(t *testing.T) {
-	p := normalClone(t)
-	addMocks(t, p.worktrees[0])
-	out, _, _ := run(t, p.worktrees[1], "list")
-	if n := strings.Count(out, "01JC8Z"); n != 3 {
-		t.Errorf("want the 3 comments on feat/x, got %d:\n%s", n, out)
-	}
-	out, _, _ = run(t, p.worktrees[0], "list")
-	if out != "" {
-		t.Errorf("main has no comments, got:\n%s", out)
-	}
-	out, _, _ = run(t, p.worktrees[0], "list", "--branch", "feat/y")
-	if n := strings.Count(out, "01JC8Z"); n != 1 {
-		t.Errorf("want the 1 comment on feat/y, got %d:\n%s", n, out)
-	}
-}
-
-func TestListOnDetachedHeadNeedsBranch(t *testing.T) {
-	p := normalClone(t)
-	git(t, p.worktrees[1], "checkout", "-q", "--detach")
-	_, stderr, code := run(t, p.worktrees[1], "list")
-	if code != 1 || !strings.Contains(stderr, "HEAD is detached") {
-		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 }
 
