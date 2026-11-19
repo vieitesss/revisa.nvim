@@ -245,7 +245,7 @@ func add(args []string, stdout, stderr io.Writer) error {
 	fl := flag.NewFlagSet("add", flag.ContinueOnError)
 	fl.SetOutput(stderr)
 	path := fl.String("path", "",
-		"file path, absolute or relative to the repo root")
+		"file path, absolute or relative to the project root")
 	lineRange := fl.String("lines", "", "line or range, as 12 or 12-14")
 	body := fl.String("body", "", "the comment")
 	side := fl.String("side", "new", "new or old")
@@ -266,7 +266,7 @@ func add(args []string, stdout, stderr io.Writer) error {
 	}
 	if !filepath.IsAbs(*path) && !filepath.IsLocal(*path) {
 		return usageError(fmt.Sprintf(
-			"add: --path must be absolute or relative to the repo root,"+
+			"add: --path must be absolute or relative to the project root,"+
 				" got %q", *path))
 	}
 	start, end, err := parseLines(*lineRange)

@@ -3,6 +3,7 @@ package main_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -42,7 +43,8 @@ func TestAddErrors(t *testing.T) {
 		{"not a number", append(file, "--lines", "a"),
 			"--lines must be N or N-M", 2},
 		{"escaping path", []string{"--path", "../x",
-			"--lines", "1", "--body", "b"}, "relative to the repo root", 2},
+			"--lines", "1", "--body", "b"},
+			"relative to the project root", 2},
 		{"bad side", append(file, "--lines", "1",
 			"--side", "left"), "--side must be new or old", 2},
 		{"old without commit", append(file, "--lines", "1",
@@ -62,6 +64,14 @@ func TestAddErrors(t *testing.T) {
 	}
 	if got := listJSON(t, linked); len(got) != 0 {
 		t.Errorf("failed adds stored %d comments", len(got))
+	}
+}
+
+func TestAddHelpDescribesProjectRelativePaths(t *testing.T) {
+	_, stderr, code := run(t, t.TempDir(), "add", "--help")
+	want := "file path, absolute or relative to the project root"
+	if code != 0 || !strings.Contains(stderr, want) {
+		t.Errorf("exit %d, help %q lacks %q", code, stderr, want)
 	}
 }
 
