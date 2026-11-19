@@ -24,8 +24,9 @@ The plugin uses the revisa CLI. It looks for an executable named revisa on PATH,
 then for bin/revisa inside the plugin directory. If neither exists, an error
 names both locations. The CLI is the only code that reads or writes comments.
 
-|:Revisa-send| with notify = "rex" needs REX_SESSION set and rex on PATH.
-Otherwise it reports that and sends nothing.
+|:Revisa-send| needs Rex or Recado. Both are optional. Rex needs REX_SESSION
+set and rex on PATH. Recado needs recado on PATH. With neither, the command
+reports that and sends nothing.
 
 The worktree picker uses |vim.ui.select|. It needs no picker plugin.
 
@@ -192,52 +193,63 @@ COMMANDS                                                      *revisa-commands*
     same as the command.
 
 :Revisa send [WORKTREE]                                         *:Revisa-send*
-    Tell an agent that comments are waiting on a branch. It needs
-    notify = "recado" or notify = "rex" in |revisa-setup|. Without it the
-    command says which settings it needs; a notifier that is not
-    available reports why and sends nothing.
+    Tell an agent that comments are waiting on a branch. It reaches the
+    agent through a notifier, Rex or Recado, chosen by notify in
+    |revisa-setup|. By default it uses Rex when Neovim runs inside Rex,
+    else Recado. A notifier that is not available reports why and sends
+    nothing.
 
     [WORKTREE] is a path or a branch, as for |:Revisa-review|. Without it
     the worktree is the changes buffer's, the diff view's, or the current
     file's git worktree. The branch of that worktree goes in the message.
     An explicit path also runs the CLI there, as for |:Revisa-review|.
 
-    With notify = "recado", only live agents on this machine are offered:
-    remote agents, and Codex, which cannot receive these messages, are
-    dropped. The one agent whose working directory resolves to a worktree
-    root equal to the worktree's is offered first, marked as the match.
-    No match, several matches or an unknown working directory means no
-    preselection. OpenCode's reported working directory is not used.
+    |vim.ui.select| lists the recipients, one line each: >
 
-    With notify = "rex", every pane of the Rex session is offered, except
-    the one Neovim runs in, and the one whose program works in the
-    worktree comes first, marked as the match. The pane is captured with
-    rex capture before the confirm, which shows the last 10 lines it
-    holds. The pick is always explicit, and the confirm sends to that one
-    pane. Rex types into whatever runs there: if the agent has exited,
-    the text goes to the shell.
+        claude  ~/w/linked  feat/x  idle  [work › editor]
+<
+    The columns are the agent's harness, its working directory, its git
+    branch, its state, idle or busy, and its location. The location, the
+    Rex session and window, shows under Rex only. A column the notifier
+    cannot tell stays blank. The list has no ids. It starts with the agents
+    working in the worktree under review, then those in the same project,
+    then, under Rex, those in the same Rex session, then the rest. Nothing
+    is preselected. Cancelling sends nothing.
 
-    |vim.ui.select| always asks, and cancelling sends nothing.
+    Through Rex, the list holds the agents of every Rex session: the panes
+    running a recognised agent program. Shells, editors and other panes are
+    left out, and so is the pane Neovim runs in. Rex types into the pane,
+    so a confirm follows the pick: >
+
+        revisa: send to claude in work › editor?
+<
+    Through Recado, only live agents on this machine are listed. Remote
+    agents, and Codex, which cannot receive these messages, are dropped.
+    OpenCode's reported working directory is not used.
 
     The message carries no comment content, only where to read it: >
 
         revisa: review comments are waiting on branch 'feat/x'. Run:
         revisa list --branch 'feat/x' --status open. Answer each with
-        revisa resolve, not recado reply.
+        revisa resolve.
 <
     The branch is one line in the message and single-quoted for a shell,
     with an embedded quote escaped. Revisa never reads recado inbox and
     never registers an agent.
 
-    Through recado, the send sets RECADO_ADDR=revisa in the child process
-    only, keeps the default message kind and adds --meta
-    revisa_branch=<branch>. Exit 0 reports "revisa: sent to <id>" and
-    returns without polling. Exit 1 reports the CLI failure from recado's
-    stderr. Exit 2 opens the picker again.
+    A send reports "revisa: sent to <harness> in <location>" and returns
+    without polling. Without a location, it names the agent's working
+    directory instead. With no recipient, it reports "revisa: no recipient
+    to notify".
 
-    Through rex, the message is typed with rex send and Return is pressed
-    with rex send-key, both into the picked block. Success reports
-    "revisa: sent to <block>" and returns; a failure reports rex's stderr.
+    Through Rex, the message is typed with rex send and Return is pressed
+    with rex send-key, both in the picked agent's own session. A failure
+    reports rex's stderr.
+
+    Through Recado, the send sets RECADO_ADDR=revisa in the child process
+    only, keeps the default message kind and adds --meta
+    revisa_branch=<branch>. Exit 1 reports the CLI failure from recado's
+    stderr. Exit 2 opens the picker again.
 
 Comments also refresh on BufReadPost of real file buffers and after a successful
 add. Switching to an already loaded buffer does not refresh comments.
@@ -404,15 +416,16 @@ For configurations that expect a setup function, this is supported: >
 
     require("revisa").setup({ notify = "recado" })
 <
-The only option is notify, which chooses how |:Revisa-send| reaches an
-agent: >
+The only option is notify, which chooses the notifier |:Revisa-send| reaches
+agents through: >
 
-    "none"      Do not notify agents. The default.
-    "recado"    Send through recado, which must be on PATH.
-    "rex"       Type the message into a Rex pane, which needs REX_SESSION
-                set and rex on PATH.
+    "auto"      Rex when REX_SESSION is set and rex is on PATH, else
+                Recado when recado is on PATH, else an error. The default.
+    "rex"       Rex, which needs REX_SESSION set and rex on PATH.
+    "recado"    Recado, which must be on PATH.
+    "none"      Do not notify agents.
 <
-Any other value is an error naming these three. Without a setup call the
-setting stays "none".
+Any other value is an error naming these four. Without a setup call the
+setting is "auto".
 
 vim:tw=78:ts=4:ft=help:norl:
