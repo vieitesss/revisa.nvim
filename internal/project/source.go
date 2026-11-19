@@ -1,4 +1,4 @@
-package main
+package project
 
 import (
 	"errors"
@@ -9,7 +9,6 @@ import (
 
 	"github.com/vieitesss/revisa.nvim/internal/anchor"
 	"github.com/vieitesss/revisa.nvim/internal/git"
-	"github.com/vieitesss/revisa.nvim/internal/project"
 )
 
 type source struct {
@@ -30,7 +29,7 @@ func newSource(dir string) (*source, error) {
 	}, nil
 }
 
-func anchorSource(p project.Project) (anchor.Source, error) {
+func anchorSource(p Project) (anchor.Source, error) {
 	if !p.Git {
 		return dirSource(p.Root), nil
 	}
@@ -79,7 +78,7 @@ func (s *source) ReadCommit(rev, path string) (string, string, error) {
 	return content, commit, err
 }
 
-func addContent(p project.Project, side, branch, rev, path string) (
+func addContent(p Project, side, branch, rev, path string) (
 	content, commit string, err error) {
 	if !p.Git {
 		content, err = readCurrent(p.Root, path)

@@ -34,7 +34,7 @@ func migrate(args []string, stdout, stderr io.Writer) error {
 	if p.Root == "" {
 		return errors.New("migrate: no working tree to walk")
 	}
-	*branch, err = commentBranch(p, "migrate", *branch)
+	*branch, err = p.CommentBranch("migrate", *branch)
 	if err != nil {
 		return err
 	}

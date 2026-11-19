@@ -4,8 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-
-	"github.com/vieitesss/revisa.nvim/internal/store"
 )
 
 func prune(args []string, stdout, stderr io.Writer) error {
@@ -30,22 +28,9 @@ func prune(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 	}
-	all, err := store.Load(p.Store)
+	pruned, err := p.Prune(*branch)
 	if err != nil {
 		return err
-	}
-	pruned := 0
-	for _, c := range all {
-		if c.Status != "resolved" {
-			continue
-		}
-		if *branch != "" && c.Branch != *branch {
-			continue
-		}
-		if err := store.Delete(p.Store, c.ID); err != nil {
-			return fmt.Errorf("prune: %w", err)
-		}
-		pruned++
 	}
 	fmt.Fprintf(stdout, "pruned %d\n", pruned)
 	return nil

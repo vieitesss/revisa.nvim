@@ -6,15 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/vieitesss/revisa.nvim/internal/anchor"
 	"github.com/vieitesss/revisa.nvim/internal/project"
 	"github.com/vieitesss/revisa.nvim/internal/store"
 )
@@ -118,10 +115,18 @@ func findProject() (project.Project, error) {
 func gitOnlyFlags(fl *flag.FlagSet, names ...string) error {
 	var err error
 	fl.Visit(func(f *flag.Flag) {
-		if slices.Contains(names, f.Name) {
-			err = fmt.Errorf("%s: --%s %w",
-				fl.Name(), f.Name, project.ErrNeedsGit)
+		if !slices.Contains(names, f.Name) {
+			return
 		}
+		name := f.Name
+		if name == "side" {
+			if f.Value.String() != "old" {
+				return
+			}
+			name += " old"
+		}
+		err = fmt.Errorf("%s: --%s %w",
+			fl.Name(), name, project.ErrNeedsGit)
 	})
 	return err
 }
@@ -142,7 +147,7 @@ func list(args []string, stdout, stderr io.Writer) error {
 		return usageError(fmt.Sprintf(
 			"list: unexpected argument %q", positional[0]))
 	}
-	if *status != "" && *status != "open" && *status != "resolved" {
+	if *status != "" && *status != store.Open && *status != store.Resolved {
 		return usageError(fmt.Sprintf(
 			"list: --status must be open or resolved, got %q", *status))
 	}
@@ -159,32 +164,13 @@ func list(args []string, stdout, stderr io.Writer) error {
 	if err := warnLocalComments(p, stderr); err != nil {
 		return err
 	}
-	*branch, err = commentBranch(p, "list", *branch)
+	comments, err := p.List(*branch, *status)
 	if err != nil {
 		return err
 	}
-	all, err := store.Load(p.Store)
-	if err != nil {
-		return err
-	}
-
-	matched := []listed{}
-	src, err := anchorSource(p)
-	if err != nil {
-		return err
-	}
-	for _, c := range all {
-		if p.Git && c.Branch != *branch {
-			continue
-		}
-		if *status != "" && c.Status != *status {
-			continue
-		}
-		located, err := anchor.Locate(c, src)
-		if err != nil {
-			return err
-		}
-		matched = append(matched, newListed(c, located))
+	matched := make([]listed, 0, len(comments))
+	for _, c := range comments {
+		matched = append(matched, newListed(c))
 	}
 
 	if *asJSON {
@@ -208,11 +194,11 @@ type listed struct {
 	Condition string `json:"condition,omitempty"`
 }
 
-func newListed(c store.Comment, where anchor.Result) listed {
-	l := listed{Comment: c, Condition: where.Condition}
-	if where.Condition == "" {
-		l.LineStart = &where.LineStart
-		l.LineEnd = &where.LineEnd
+func newListed(c project.LocatedComment) listed {
+	l := listed{Comment: c.Comment, Condition: c.Anchor.Condition}
+	if c.Anchor.Condition == "" {
+		l.LineStart = &c.Anchor.LineStart
+		l.LineEnd = &c.Anchor.LineEnd
 	}
 	return l
 }
@@ -231,8 +217,8 @@ func writePlain(w io.Writer, l listed) {
 	if l.Condition != "" {
 		header += " " + l.Condition
 	}
-	if c.Status == "resolved" {
-		header += " resolved"
+	if c.Status == store.Resolved {
+		header += " " + store.Resolved
 	}
 	fmt.Fprintf(w, "%s\n%s\n", header, c.Body)
 	if c.Reply != nil {
@@ -282,18 +268,10 @@ func add(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if !p.Git {
-		if *side == "old" {
-			return fmt.Errorf("add: --side old %w", project.ErrNeedsGit)
-		}
-		if err := gitOnlyFlags(fl, "branch", "commit"); err != nil {
+		if err := gitOnlyFlags(fl, "branch", "commit", "side"); err != nil {
 			return err
 		}
 	}
-	*branch, err = commentBranch(p, "add", *branch)
-	if err != nil {
-		return err
-	}
-
 	switch *side {
 	case "new":
 		if *commit != "" {
@@ -307,53 +285,24 @@ func add(args []string, stdout, stderr io.Writer) error {
 		return usageError(fmt.Sprintf(
 			"add: --side must be new or old, got %q", *side))
 	}
-	content, readCommit, err := addContent(p, *side, *branch, *commit,
-		*path)
-	if err != nil {
-		return fmt.Errorf("add: %w", err)
-	}
-	*commit = readCommit
-	fileLines := strings.Split(strings.TrimSuffix(content, "\n"), "\n")
-	if content == "" || end > len(fileLines) {
+	c, err := p.Add(project.Draft{
+		Path:   *path,
+		Start:  start,
+		End:    end,
+		Body:   *body,
+		Side:   *side,
+		Branch: *branch,
+		Commit: *commit,
+	})
+	if pastEnd, ok := errors.AsType[project.LinesPastEndError](err); ok {
 		return fmt.Errorf("add: lines %s are past the end of %s (%d lines)",
-			*lineRange, *path, len(fileLines))
+			*lineRange, *path, pastEnd.LineCount)
 	}
-
-	c := store.Comment{
-		ID:         store.NewID(time.Now()),
-		Branch:     *branch,
-		Path:       *path,
-		Side:       *side,
-		LineStart:  start,
-		LineEnd:    end,
-		AnchorText: strings.Join(fileLines[start-1:end], "\n"),
-		Commit:     *commit,
-		Body:       *body,
-		Status:     "open",
-	}
-	if err := store.SaveNew(p.Store, c); err != nil {
-		if errors.Is(err, fs.ErrExist) {
-			return fmt.Errorf("add: comment %s already exists", c.ID)
-		}
+	if err != nil {
 		return err
 	}
 	fmt.Fprintln(stdout, c.ID)
 	return nil
-}
-
-func commentBranch(p project.Project, command, branch string) (
-	string, error) {
-	if !p.Git || branch != "" {
-		return branch, nil
-	}
-	branch, err := p.Branch()
-	if err != nil {
-		return "", fmt.Errorf("not inside a git repository: %w", err)
-	}
-	if branch == "" {
-		return "", fmt.Errorf("%s: HEAD is detached, pass --branch", command)
-	}
-	return branch, nil
 }
 
 func parseLines(s string) (start, end int, err error) {
@@ -389,12 +338,8 @@ func edit(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	c, err := store.Get(p.Store, positional[0])
+	c, err := p.Edit(positional[0], *body)
 	if err != nil {
-		return fmt.Errorf("edit: %w", err)
-	}
-	c.Body = *body
-	if err := store.Save(p.Store, c); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "edited %s\n", c.ID)
@@ -420,16 +365,8 @@ func resolve(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	c, err := store.Get(p.Store, positional[0])
+	c, err := p.Resolve(positional[0], *reply)
 	if err != nil {
-		return fmt.Errorf("resolve: %w", err)
-	}
-	if c.Status == "resolved" {
-		return fmt.Errorf("resolve: comment %s is already resolved", c.ID)
-	}
-	c.Status = "resolved"
-	c.Reply = reply
-	if err := store.Save(p.Store, c); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "resolved %s\n", c.ID)
