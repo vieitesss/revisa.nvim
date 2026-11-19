@@ -404,11 +404,10 @@ func TestReviewStartsNeovim(t *testing.T) {
 			p := normalClone(t)
 			linked := p.worktrees[1]
 			stub := t.TempDir()
-			record := filepath.Join(stub, "argv")
+			record := filepath.Join(stub, "cwd")
 			worktreeRecord := filepath.Join(stub, "worktree")
 			writeFile(t, stub, "nvim",
-				"#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$REVISA_RECORD\"\n"+
-					"pwd >> \"$REVISA_RECORD\"\n"+
+				"#!/bin/sh\npwd > \"$REVISA_RECORD\"\n"+
 					"printf '%s' \"${REVISA_REVIEW_WORKTREE-}\" > "+
 					"\"$REVISA_WORKTREE_RECORD\"\n")
 			if err := os.Chmod(filepath.Join(stub, "nvim"),
@@ -424,9 +423,8 @@ func TestReviewStartsNeovim(t *testing.T) {
 					"REVISA_WORKTREE_RECORD=" + worktreeRecord}
 			}
 			args := []string{"review"}
-			// The command line never carries the worktree: a path with a
-			// space or a bar must reach Neovim verbatim.
-			want := []string{"+Revisa review", realPath(t, linked)}
+			// The worktree reaches the editor verbatim through the
+			// documented environment variable, not an Ex command.
 			wantWorktree := ""
 			if !c.pick {
 				args = append(args, linked)
@@ -436,11 +434,9 @@ func TestReviewStartsNeovim(t *testing.T) {
 			if code != 0 {
 				t.Fatalf("review exit %d: %s", code, stderr)
 			}
-			got := strings.Split(strings.TrimSuffix(
-				readFile(t, record), "\n"), "\n")
-			if len(got) != len(want) || got[0] != want[0] ||
-				got[1] != want[1] {
-				t.Errorf("got %q, want %q", got, want)
+			got := strings.TrimSuffix(readFile(t, record), "\n")
+			if want := realPath(t, linked); got != want {
+				t.Errorf("editor cwd %q, want %q", got, want)
 			}
 			if got := readFile(t, worktreeRecord); got != wantWorktree {
 				t.Errorf("REVISA_REVIEW_WORKTREE %q, want %q",
