@@ -1,5 +1,8 @@
 # Coding standards
 
+Mechanical rules (formatting, `go vet`, 80-column limit, `errors.AsType`)
+are enforced by `just check`. Reviewers skip what `just check` catches.
+
 ## All languages
 
 - Keep every line of code at 80 columns or fewer, counting a tab as 4

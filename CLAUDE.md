@@ -5,8 +5,11 @@ A Neovim plugin (`lua/`, `plugin/`, `doc/`), a Go CLI (`cmd/revisa`,
 
 - Follow `CODING_STANDARDS.md`.
 - Use the terms in `GLOSSARY.md`. Decisions live in `docs/adr/`.
-- `just test` runs every test, Go and Neovim. `just build` builds
-  `bin/revisa`.
+- `just check` runs mechanical checks (`gofmt`, `go vet`, `errors.AsType`,
+  80-column limit).
+- `just test-fast` runs Go unit tests (`./internal/...`); `just test` runs
+  every test, Go and headless Neovim (`cmd/revisa`, ~70 s). `just build`
+  builds `bin/revisa`.
 - Commits follow Conventional Commits. Mark breaking changes with `!`.
 
 ## Releases
@@ -33,5 +36,6 @@ To cut a release:
 5. Show the user the version, the reasons for it and the notes. Wait for
    their approval. Never tag without it.
 6. Run `just release <X.Y.Z> <notes-file>`, without the `v`. It checks
-   that `main` is clean and equal to `origin/main`, runs the tests, pushes
-   the tag and creates the GitHub release.
+   that `main` is clean and equal to `origin/main`, pushes the tag and
+   creates the GitHub release (run `just check` and `just test` before
+   releasing).
