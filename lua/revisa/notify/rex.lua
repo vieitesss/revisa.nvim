@@ -7,6 +7,10 @@ M.confirm = true
 -- unnamedWindow is the label rex makes up for a window nobody named.
 local unnamedWindow = "^Window %x+$"
 
+-- terminal is the creator of the blocks rex can type into. Other blocks,
+-- such as port forwards, answer no program_status call.
+local terminal = "com.superlogical.terminal"
+
 -- unavailable is the one reason every rex feature reports: both the
 -- session it runs in and the executable are required.
 local unavailable = "revisa: rex needs REX_SESSION set and rex on PATH"
@@ -86,9 +90,9 @@ local function windows(id)
     return labels
 end
 
--- records is what the programs in one block report about themselves. A
--- shell, an editor or a port forward holds no program that reports
--- itself and answers with an empty list.
+-- records is what the programs in one terminal block report about
+-- themselves. A shell or an editor holds no program that reports itself
+-- and answers with an empty list.
 local function records(id, block)
     local data, why = decode({ "block", "call", "-s", id, "-b", block,
         "program_status" })
@@ -157,7 +161,8 @@ function M.recipients()
             return nil
         end
         for _, block in ipairs(panes) do
-            if block.block_id ~= vim.env.REX_BLOCK then
+            if block.creator_name == terminal
+                and block.block_id ~= vim.env.REX_BLOCK then
                 local listed, gone = records(entry.id, block.block_id)
                 if not listed then
                     cli.error(gone)

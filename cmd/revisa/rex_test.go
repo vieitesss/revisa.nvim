@@ -51,6 +51,10 @@ elif [ "$1 $2" = "block ls" ]; then
     print_file "$dir/blocks-$(short "$session").json"
 elif [ "$1 $2" = "window ls" ]; then
     print_file "$dir/windows-$(short "$session").json"
+elif [ "$1 $2" = "block call" ] && [ -f "$dir/tunnel-$(short "$block")" ]; then
+    printf 'Error: block %s has no method "%s"; methods: info\n' \
+        "$(short "$block")" "$method" >&2
+    exit 1
 elif [ "$1 $2" = "block call" ]; then
     file="$dir/$method-$(short "$block").json"
     if [ -f "$file" ]; then
@@ -69,6 +73,7 @@ type rexWindow struct {
 
 // rexBlock is one pane of the session. State empty holds no
 // program_status record, which is what a shell or an editor reports.
+// Tunnel makes it a port forward, which answers no program_status call.
 type rexBlock struct {
 	ID      string
 	Label   string
@@ -76,6 +81,7 @@ type rexBlock struct {
 	Cwd     string
 	Harness string
 	State   string
+	Tunnel  bool
 }
 
 type rexSession struct {
@@ -105,6 +111,17 @@ func rexStub(t *testing.T, sessions ...rexSession) string {
 		short := shortID(session.ID)
 		blocks := []map[string]string{}
 		for _, block := range session.Blocks {
+			id := shortID(block.ID)
+			if block.Tunnel {
+				blocks = append(blocks, map[string]string{
+					"block_id":     block.ID,
+					"label":        block.Label,
+					"creator_name": "com.superlogical.tunnel",
+					"flavor":       "com.superlogical.tunnel.dial",
+				})
+				writeFile(t, dir, "tunnel-"+id, "")
+				continue
+			}
 			blocks = append(blocks, map[string]string{
 				"block_id":     block.ID,
 				"label":        block.Label,
@@ -112,7 +129,6 @@ func rexStub(t *testing.T, sessions ...rexSession) string {
 				"flavor":       "com.superlogical.terminal.shell",
 				"window_id":    block.Window,
 			})
-			id := shortID(block.ID)
 			writeFile(t, dir, "program_status-"+id+".json",
 				recordsJSON(t, block.State))
 			writeFile(t, dir, "process-"+id+".json",
@@ -236,6 +252,8 @@ func leftSession(linked, main, elsewhere string) rexSession {
 				Cwd: main, Harness: "nvim", State: "working"},
 			{ID: "block:01HOME", Label: "shell", Window: "window:UNNAMED",
 				Cwd: elsewhere, Harness: "pi", State: "working"},
+			{ID: "block:01FWD", Label: "fwd -L 8000:localhost:8000",
+				Tunnel: true},
 		},
 	}
 }
