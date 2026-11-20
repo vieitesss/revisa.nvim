@@ -228,16 +228,17 @@ COMMANDS                                                      *revisa-commands*
     When two or more recipients share a window, the side of the window
     each one sits in follows: the half its centre falls in, left or
     right, else top or bottom, else both halves when only a corner tells
-    them apart, as in bottom-left, and a floating pane shows as floating.
-    A lone recipient in a window goes without. Panes that still share a
-    name are numbered in the order the list shows them, as in pane 1 and
-    pane 2. So a window split in two reads "work › tab 1 (here) › left"
-    and "work › tab 1 (here) › right".
+    them apart, as in bottom-left, while a floating pane shows as
+    floating, numbered floating 1, floating 2 when several float, left to
+    right then top to bottom. A lone recipient in a window goes without.
+    Panes that still share a name are numbered in the order the list
+    shows them, as in pane 1 and pane 2. So a window split in two reads
+    "work › tab 1 (here) › left" and "work › tab 1 (here) › right".
 
     Ties within one rank keep the nearest recipient first: the window
-    Neovim runs in, then the other windows in tab order, and within a
-    window the panes left to right, then top to bottom. Sessions keep
-    the order rex lists them in.
+    Neovim runs in comes first, then every other recipient in the order
+    rex lists its session, and within a session the windows in tab order,
+    and within a window the panes left to right, then top to bottom.
 
     Through Rex, the list holds the agents of every Rex session: the panes
     running a recognised agent program. Shells, editors and other panes are

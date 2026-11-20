@@ -707,12 +707,12 @@ func TestBufferRexNumbersFloatingPanes(t *testing.T) {
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
 		"REVISA_PANES="+strings.Join([]string{
 			"claude  ~/w/linked  feat/x  idle" +
-				"  [stacks › tab 1 (here) › pane 1]",
+				"  [stacks › tab 1 (here) › floating 1]",
 			"claude  ~/w/linked  feat/x  idle" +
-				"  [stacks › tab 1 (here) › pane 2]",
+				"  [stacks › tab 1 (here) › floating 2]",
 		}, "\n"),
 		"REVISA_PICK=1,1",
-		"REVISA_SENT=claude in stacks › tab 1 (here) › pane 1")
+		"REVISA_SENT=claude in stacks › tab 1 (here) › floating 1")
 	want := [][]string{
 		{"send", "-s", "session:one", "-b", "block:01NEAR",
 			reviewMessage},
@@ -828,12 +828,15 @@ func TestBufferRexTieOrderKeepsSessionOrder(t *testing.T) {
 			ID: "session:one", Label: "revisa_nvim",
 			Windows: []rexWindow{
 				{ID: "window:ONE", Label: "Window 11111111"},
+				{ID: "window:TWO", Label: "Window 22222222"},
 			},
 			Blocks: []rexBlock{
-				{ID: "block:01ME", Window: "window:ONE", Cwd: linked,
+				{ID: "block:01ME", Window: "window:TWO", Cwd: linked,
 					Harness: "nvim"},
-				{ID: "block:01AGENT", Window: "window:ONE",
+				{ID: "block:01AGENT", Window: "window:TWO",
 					Cwd: linked, Harness: "pi", State: "idle"},
+				{ID: "block:01TAB", Window: "window:ONE",
+					Cwd: linked, Harness: "claude", State: "idle"},
 			},
 		},
 	)
@@ -843,16 +846,18 @@ func TestBufferRexTieOrderKeepsSessionOrder(t *testing.T) {
 		"REVISA_SETTING=rex",
 		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
 		"REVISA_PANES="+strings.Join([]string{
-			"claude  ~/w/linked  feat/x  idle  [other]",
 			"pi      ~/w/linked  feat/x  idle" +
-				"  [revisa_nvim › tab 1 (here)]",
+				"  [revisa_nvim › tab 2 (here)]",
+			"claude  ~/w/linked  feat/x  idle  [other]",
+			"claude  ~/w/linked  feat/x  idle" +
+				"  [revisa_nvim › tab 1]",
 		}, "\n"),
 		"REVISA_PICK=1,1",
-		"REVISA_SENT=claude in other")
+		"REVISA_SENT=pi in revisa_nvim › tab 2 (here)")
 	want := [][]string{
-		{"send", "-s", "session:two", "-b", "block:02AGENT",
+		{"send", "-s", "session:one", "-b", "block:01AGENT",
 			reviewMessage},
-		{"send-key", "-s", "session:two", "-b", "block:02AGENT",
+		{"send-key", "-s", "session:one", "-b", "block:01AGENT",
 			"enter"},
 	}
 	equalCommands(t, "delivery", want, rexDelivery(t, stub))

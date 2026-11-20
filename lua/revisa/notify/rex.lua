@@ -272,15 +272,15 @@ end
 
 -- suffixes tells apart the recipients that share one window: a tiled
 -- pane names the half of the window it centres in, a floating one says
--- it floats. When two of them still share a name, the window numbers
--- them in list order instead.
+-- it floats, numbered when several float. When two of them still share
+-- a name, the window numbers them in list order instead.
 local function suffixes(group)
-    local labels, tiled, rects = {}, {}, {}
+    local labels, tiled, rects, floats = {}, {}, {}, {}
     local placed = true
     for at, recipient in ipairs(group) do
         local site = recipient.site or {}
         if site.floating then
-            labels[at] = "floating"
+            floats[#floats + 1] = at
         else
             tiled[#tiled + 1] = at
             if type(site.rect) == "table" then
@@ -300,6 +300,12 @@ local function suffixes(group)
     end
     for at, index in ipairs(tiled) do
         labels[index] = named[at]
+    end
+    for at, index in ipairs(floats) do
+        labels[index] = "floating"
+        if #floats > 1 then
+            labels[index] = labels[index] .. " " .. at
+        end
     end
     if not apart(labels) then
         numbered(group)
@@ -333,16 +339,14 @@ local function locate(recipients, label, count)
     end
 end
 
--- closer orders the recipients of one session: the window the plugin
--- runs in first, then the other windows in tab-bar order, and within a
--- window the blocks left to right, then top to bottom.
+-- closer orders the recipients of one session: the windows in tab-bar
+-- order, and within a window the blocks left to right, then top to
+-- bottom.
 local function closer(recipients)
     local function key(recipient)
         local rect = (recipient.site or {}).rect or {}
         local window = math.huge
-        if recipient.here then
-            window = 0
-        elseif recipient.window then
+        if recipient.window then
             window = recipient.window.at
         end
         return { window, rect[1] or 0, rect[2] or 0, recipient.at }
@@ -361,16 +365,16 @@ end
 -- M.recipients lists the blocks that run a program reporting itself, in
 -- every session. The pane the plugin runs in is left out: typing the
 -- message there puts it in this editor, and a review there duplicates
--- this one. Sessions keep the order rex lists them in, and inside a
--- session the recipients come in window and pane order, so a tie keeps
--- the nearest window first.
+-- this one. The recipients of the window the plugin runs in come first,
+-- then every other recipient in session order, each session in window
+-- and pane order, so a tie keeps the nearest window first.
 function M.recipients()
     local found, why = sessions()
     if not found then
         cli.error(why)
         return nil
     end
-    local recipients = {}
+    local own, others = {}, {}
     for _, entry in ipairs(found) do
         local listed, bad = windows(entry.id)
         if not listed then
@@ -382,7 +386,7 @@ function M.recipients()
             cli.error(failed)
             return nil
         end
-        local own = ownWindow(listedBlocks)
+        local ownID = ownWindow(listedBlocks)
         local byID = {}
         for _, window in ipairs(listed) do
             byID[window.id] = window
@@ -412,7 +416,7 @@ function M.recipients()
                         state = state(reports[1]),
                         window = window,
                         site = window and window.sites[block.block_id],
-                        here = window ~= nil and window.id == own,
+                        here = window ~= nil and window.id == ownID,
                         at = #sessionRecipients + 1,
                     }
                 end
@@ -421,10 +425,15 @@ function M.recipients()
         closer(sessionRecipients)
         locate(sessionRecipients, entry.label, #listed)
         for _, recipient in ipairs(sessionRecipients) do
-            recipients[#recipients + 1] = recipient
+            if recipient.here then
+                own[#own + 1] = recipient
+            else
+                others[#others + 1] = recipient
+            end
         end
     end
-    return recipients
+    vim.list_extend(own, others)
+    return own
 end
 
 -- M.deliver types the message into the block and presses Return, in the
