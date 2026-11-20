@@ -70,9 +70,17 @@ func bareRepo(t *testing.T) project {
 	return project{worktrees: []string{a, b}}
 }
 
+// notifierPath is a PATH holding the stubs, revisa and git alone. git is
+// linked into a directory of its own: its real directory may also hold a
+// real notifier, which a test that leaves that notifier out must not see.
 func notifierPath(t *testing.T, stubs ...string) string {
 	t.Helper()
 	gitBinary, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitDir := t.TempDir()
+	err = os.Symlink(gitBinary, filepath.Join(gitDir, "git"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +90,7 @@ func notifierPath(t *testing.T, stubs ...string) string {
 			parts = append(parts, stub)
 		}
 	}
-	parts = append(parts, filepath.Dir(revisa), filepath.Dir(gitBinary))
+	parts = append(parts, filepath.Dir(revisa), gitDir)
 	return strings.Join(parts, string(os.PathListSeparator))
 }
 
