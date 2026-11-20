@@ -8,6 +8,43 @@ default:
 build:
     go build -o bin/revisa ./cmd/revisa
 
+# Check formatting, vet, error matching, and 80-column limit.
+check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bad_fmt=$(gofmt -l $(git ls-files '*.go'))
+    if [[ -n "$bad_fmt" ]]; then
+        echo "gofmt needed:" >&2
+        echo "$bad_fmt" >&2
+        exit 1
+    fi
+    go vet ./...
+    if git grep -n 'errors\.As(' -- '*.go'; then
+        echo "use errors.AsType[T](err) instead of errors.As" >&2
+        exit 1
+    fi
+    python3 - <<'PY'
+    import subprocess, sys
+    files = subprocess.check_output(
+        ["git", "ls-files", "*.go", "*.lua"], text=True
+    ).splitlines()
+    bad = []
+    for f in files:
+        with open(f) as fh:
+            for i, line in enumerate(fh, 1):
+                w = len(line.rstrip("\r\n").expandtabs(4))
+                if w > 80:
+                    bad.append(f"{f}:{i}: {w} cols")
+    if bad:
+        print("lines over 80 columns:", file=sys.stderr)
+        print("\n".join(bad), file=sys.stderr)
+        sys.exit(1)
+    PY
+
+# Run fast Go-only unit tests (skips headless Neovim tests in cmd/revisa).
+test-fast:
+    go test ./internal/...
+
 # Run the Go and Neovim tests.
 test:
     go test ./...
@@ -44,7 +81,6 @@ release VERSION NOTES:
         echo "release: tag $tag already exists" >&2
         exit 1
     fi
-    just test
     git tag -a "$tag" -m "$tag"
     git push origin "$tag"
     gh release create "$tag" --title "$tag" --notes-file "$notes" --verify-tag
