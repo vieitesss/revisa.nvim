@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install just and Neovim
+        run: |
+          curl -fsSL https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+          curl -fsSL -o /tmp/nvim.tar.gz \
+            https://github.com/neovim/neovim/releases/download/v0.12.0/nvim-linux-x86_64.tar.gz
+          sudo tar -C /usr/local --strip-components=1 -xzf /tmp/nvim.tar.gz
+          nvim --version
+      - run: just check
+      - run: just test
