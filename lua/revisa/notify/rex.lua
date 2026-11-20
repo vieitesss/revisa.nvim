@@ -217,82 +217,6 @@ local function place(label, window, here, count)
     return label .. " › " .. name
 end
 
--- distinct returns the distinct values one axis of the rects takes,
--- smallest first.
-local function distinct(recipients, axis)
-    local seen, list = {}, {}
-    for _, recipient in ipairs(recipients) do
-        local value = recipient.site.rect[axis]
-        if not seen[value] then
-            seen[value] = true
-            list[#list + 1] = value
-        end
-    end
-    table.sort(list)
-    return list
-end
-
--- slot is the 1-based place of value in list.
-local function slot(list, value)
-    for at, entry in ipairs(list) do
-        if entry == value then
-            return at
-        end
-    end
-    return nil
-end
-
--- words names one axis of a grid of up to three slots, nil when the
--- axis has a single slot or too many to name shortly.
-local function words(count, low, middle, high)
-    if count == 2 then
-        return { low, high }
-    end
-    if count == 3 then
-        return { low, middle, high }
-    end
-    return nil
-end
-
--- positions names where each tiled recipient of one window sits, in the
--- order given, nil when their rects cannot name every one of them.
-local function positions(recipients)
-    for _, recipient in ipairs(recipients) do
-        if type(recipient.site.rect) ~= "table" then
-            return nil
-        end
-    end
-    local columns = distinct(recipients, 1)
-    local rows = distinct(recipients, 2)
-    if #columns == 1 and #rows == 1 then
-        return nil
-    end
-    local across = words(#columns, "left", "center", "right")
-    local down = words(#rows, "top", "middle", "bottom")
-    if (#columns > 1 and across == nil)
-        or (#rows > 1 and down == nil) then
-        return nil
-    end
-    local labels, seen = {}, {}
-    for at, recipient in ipairs(recipients) do
-        local parts = {}
-        if down then
-            parts[#parts + 1] = down[slot(rows, recipient.site.rect[2])]
-        end
-        if across then
-            parts[#parts + 1] = across[slot(columns,
-                recipient.site.rect[1])]
-        end
-        local label = table.concat(parts, "-")
-        if seen[label] then
-            return nil
-        end
-        seen[label] = true
-        labels[at] = label
-    end
-    return labels
-end
-
 -- bounds is where one recipient sits, empty when its layout says
 -- nothing.
 local function bounds(recipient)
@@ -300,69 +224,109 @@ local function bounds(recipient)
     return site.rect or {}
 end
 
--- bySite orders the recipients of one window left to right, then top to
--- bottom, keeping the order given when their rects say nothing.
-local function bySite(recipients)
-    local ordered = {}
-    for at, recipient in ipairs(recipients) do
-        ordered[at] = { at = at, recipient = recipient }
+-- middle is the centre of one rect, x first then y, nil when the layout
+-- gave it no rect.
+local function middle(rect)
+    if type(rect) ~= "table" then
+        return nil
     end
-    table.sort(ordered, function(a, b)
-        local left, right = bounds(a.recipient), bounds(b.recipient)
-        if (left[1] or 0) ~= (right[1] or 0) then
-            return (left[1] or 0) < (right[1] or 0)
-        end
-        if (left[2] or 0) ~= (right[2] or 0) then
-            return (left[2] or 0) < (right[2] or 0)
-        end
-        return a.at < b.at
-    end)
-    local sorted = {}
-    for at, entry in ipairs(ordered) do
-        sorted[at] = entry.recipient
+    local x, y, width, height = rect[1], rect[2], rect[3], rect[4]
+    if type(x) ~= "number" or type(y) ~= "number"
+        or type(width) ~= "number" or type(height) ~= "number" then
+        return nil
     end
-    return sorted
+    return x + width / 2, y + height / 2
 end
 
--- numbered labels tiled recipients that share a window when their rects
--- name no side: pane 1, pane 2, ... left to right, then top to bottom.
-local function numbered(recipients)
-    for at, recipient in ipairs(bySite(recipients)) do
+-- half names the half of the window a value falls in: a pane's rect
+-- runs 0..1 across the window, so its centre lies low below 0.5.
+local function half(value, low, high)
+    if value < 0.5 then
+        return low
+    end
+    return high
+end
+
+-- apart reports whether every label differs from the other ones.
+local function apart(labels)
+    local seen = {}
+    for _, label in ipairs(labels) do
+        if seen[label] then
+            return false
+        end
+        seen[label] = true
+    end
+    return true
+end
+
+-- sides names tiled panes against the whole window, not against each
+-- other: the half each centres in across comes first, then the half
+-- down, then both together as top-left. The first of these that tells
+-- every pane apart wins. nil when a rect is missing or no halves tell
+-- them apart.
+local function sides(rects)
+    local across, down, both = {}, {}, {}
+    for at, rect in ipairs(rects) do
+        local x, y = middle(rect)
+        if x == nil then
+            return nil
+        end
+        across[at] = half(x, "left", "right")
+        down[at] = half(y, "top", "bottom")
+        both[at] = down[at] .. "-" .. across[at]
+    end
+    for _, labels in ipairs({ across, down, both }) do
+        if apart(labels) then
+            return labels
+        end
+    end
+    return nil
+end
+
+-- numbered labels panes no half tells apart by where the list puts them:
+-- pane 1, pane 2, and so on.
+local function numbered(group)
+    for at, recipient in ipairs(group) do
         recipient.location = recipient.location .. " › pane " .. at
     end
 end
 
--- suffixes tells apart the recipients that share one window: tiled
--- blocks get the side of the window they sit in, floating blocks say so.
+-- suffixes tells apart the recipients that share one window: a tiled
+-- pane names the half of the window it centres in, a floating one says
+-- it floats. When two of them still share a name, the window numbers
+-- them in list order instead.
 local function suffixes(group)
-    local tiled, floating = {}, {}
-    for _, recipient in ipairs(group) do
-        local site = recipient.site
-        if site and site.floating then
-            floating[#floating + 1] = recipient
-        elseif site and type(site.rect) == "table"
-            and type(site.rect[1]) == "number"
-            and type(site.rect[2]) == "number" then
-            tiled[#tiled + 1] = recipient
+    local labels, tiled, rects = {}, {}, {}
+    local placed = true
+    for at, recipient in ipairs(group) do
+        local site = recipient.site or {}
+        if site.floating then
+            labels[at] = "floating"
+        else
+            tiled[#tiled + 1] = at
+            if type(site.rect) == "table" then
+                rects[#rects + 1] = site.rect
+            else
+                placed = false
+            end
         end
     end
-    floating = bySite(floating)
-    for at, recipient in ipairs(floating) do
-        local side = " › floating"
-        if #floating > 1 then
-            side = side .. " " .. at
-        end
-        recipient.location = recipient.location .. side
+    local named = nil
+    if placed then
+        named = sides(rects)
     end
-    if #tiled < 2 then
+    if named == nil then
+        numbered(group)
         return
     end
-    local labels = positions(tiled)
-    if labels == nil then
-        numbered(tiled)
+    for at, index in ipairs(tiled) do
+        labels[index] = named[at]
+    end
+    if not apart(labels) then
+        numbered(group)
         return
     end
-    for at, recipient in ipairs(tiled) do
+    for at, recipient in ipairs(group) do
         recipient.location = recipient.location .. " › " .. labels[at]
     end
 end
@@ -392,8 +356,7 @@ end
 
 -- closer orders the recipients of one session: the window the plugin
 -- runs in first, then the other windows in tab-bar order, and within a
--- window the tiled blocks left to right, then top to bottom, then the
--- floating ones.
+-- window the blocks left to right, then top to bottom.
 local function closer(recipients)
     local function key(recipient)
         local site = recipient.site or {}
@@ -404,8 +367,7 @@ local function closer(recipients)
         elseif recipient.window then
             window = recipient.window.at
         end
-        return { window, site.floating and 1 or 0,
-            rect[1] or 0, rect[2] or 0, recipient.at }
+        return { window, rect[1] or 0, rect[2] or 0, recipient.at }
     end
     table.sort(recipients, function(a, b)
         local left, right = key(a), key(b)
@@ -421,7 +383,7 @@ end
 -- M.recipients lists the blocks that run a program reporting itself, in
 -- every session. The pane the plugin runs in is left out: typing the
 -- message there puts it in this editor, and a review there duplicates
--- this one. The session the plugin runs in comes first, and inside a
+-- this one. Sessions keep the order rex lists them in, and inside a
 -- session the recipients come in window and pane order, so a tie keeps
 -- the nearest window first.
 function M.recipients()
@@ -431,16 +393,8 @@ function M.recipients()
         return nil
     end
     local here = session()
-    local ordered = {}
-    for _, entry in ipairs(found) do
-        if entry.id == here then
-            table.insert(ordered, 1, entry)
-        else
-            ordered[#ordered + 1] = entry
-        end
-    end
     local recipients = {}
-    for _, entry in ipairs(ordered) do
+    for _, entry in ipairs(found) do
         local listed, bad = windows(entry.id)
         if not listed then
             cli.error(bad)
@@ -487,8 +441,8 @@ function M.recipients()
                 end
             end
         end
-        locate(mine, entry.label, #listed)
         closer(mine)
+        locate(mine, entry.label, #listed)
         for _, recipient in ipairs(mine) do
             recipients[#recipients + 1] = recipient
         end
