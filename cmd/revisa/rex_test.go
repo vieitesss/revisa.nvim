@@ -69,6 +69,15 @@ exit 0
 type rexWindow struct {
 	ID    string
 	Label string
+	Panes []rexPane
+}
+
+// rexPane is where one block sits in its window: a rect in the window's
+// tiled layout, or a floating layer of its own.
+type rexPane struct {
+	ID       string
+	Floating bool
+	Rect     []float64
 }
 
 // rexBlock is one pane of the session. State empty holds no
@@ -136,18 +145,69 @@ func rexStub(t *testing.T, sessions ...rexSession) string {
 		}
 		writeFile(t, dir, "blocks-"+short+".json",
 			jsonList(t, "blocks", blocks))
-		windows := []map[string]string{}
+		windows := []map[string]any{}
 		for _, window := range session.Windows {
-			windows = append(windows, map[string]string{
-				"window_id": window.ID,
-				"label":     window.Label,
-			})
+			windows = append(windows, windowJSON(window))
 		}
 		writeFile(t, dir, "windows-"+short+".json",
 			jsonList(t, "windows", windows))
 	}
 	writeFile(t, dir, "sessions.json", jsonList(t, "sessions", listed))
 	return dir
+}
+
+// windowJSON is one window as rex lists it: the layout of its tiled
+// panes as a tree of splits, and one floating layer per floating pane.
+func windowJSON(window rexWindow) map[string]any {
+	entry := map[string]any{
+		"window_id": window.ID,
+		"label":     window.Label,
+	}
+	if len(window.Panes) == 0 {
+		return entry
+	}
+	tiled := []rexPane{}
+	floating := []map[string]any{}
+	for _, pane := range window.Panes {
+		if pane.Floating {
+			floating = append(floating, map[string]any{
+				"kind": "floating",
+				"layout": map[string]any{
+					"rect":     pane.Rect,
+					"block_id": pane.ID,
+				},
+			})
+			continue
+		}
+		tiled = append(tiled, pane)
+	}
+	layers := floating
+	if len(tiled) > 0 {
+		layers = append([]map[string]any{{
+			"kind":   "tiled",
+			"layout": splitTree(tiled),
+		}}, floating...)
+	}
+	entry["layers"] = layers
+	return entry
+}
+
+// splitTree nests the tiled panes the way rex does, halving them until
+// each layout node holds one block.
+func splitTree(panes []rexPane) map[string]any {
+	if len(panes) == 1 {
+		return map[string]any{
+			"rect":     panes[0].Rect,
+			"block_id": panes[0].ID,
+		}
+	}
+	half := len(panes) / 2
+	return map[string]any{
+		"split": map[string]any{
+			"before": splitTree(panes[:half]),
+			"after":  splitTree(panes[half:]),
+		},
+	}
 }
 
 func recordsJSON(t *testing.T, state string) string {
@@ -280,7 +340,7 @@ func TestBufferRexListsProgramsInOrder(t *testing.T) {
 		name, pick, session, block, recipient string
 	}{
 		{"this session", "1", "session:one", "block:01AGENT",
-			"claude in revisa_nvim › editor"},
+			"claude in revisa_nvim › editor (here)"},
 		{"another session", "2", "session:two", "block:02MAIN",
 			"claude in other › editor"},
 	}
@@ -305,9 +365,10 @@ func TestBufferRexListsProgramsInOrder(t *testing.T) {
 				"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
 				"REVISA_PANES="+strings.Join([]string{
 					"claude  ~/w/linked   feat/x  idle" +
-						"  [revisa_nvim › editor]",
+						"  [revisa_nvim › editor (here)]",
 					"claude  ~/w/main     main    idle  [other › editor]",
-					"pi      ~/elsewhere          busy  [revisa_nvim]",
+					"pi      ~/elsewhere          busy" +
+						"  [revisa_nvim › tab 2]",
 					"pi      ~/outside            idle  [other › editor]",
 				}, "\n"),
 				"REVISA_PICK="+c.pick+",1",
@@ -319,6 +380,183 @@ func TestBufferRexListsProgramsInOrder(t *testing.T) {
 			equalCommands(t, "delivery", want, rexDelivery(t, stub))
 		})
 	}
+}
+
+func TestBufferRexNamesTabs(t *testing.T) {
+	p, home := homeProject(t)
+	linked := p.worktrees[1]
+	writeFile(t, linked, "src/a.lua", "anchor\n")
+	stub := rexStub(t, rexSession{
+		ID: "session:one", Label: "personal_sb",
+		Windows: []rexWindow{
+			{ID: "window:ONE", Label: "Window 11111111"},
+			{ID: "window:TWO", Label: "Window 22222222"},
+		},
+		Blocks: []rexBlock{
+			{ID: "block:01TWO", Window: "window:TWO", Cwd: linked,
+				Harness: "pi", State: "idle"},
+			{ID: "block:01ME", Window: "window:ONE", Cwd: linked,
+				Harness: "nvim"},
+			{ID: "block:01ONE", Window: "window:ONE", Cwd: linked,
+				Harness: "claude", State: "idle"},
+		},
+	})
+	rexCase(t, linked, stub, "session:one",
+		"HOME="+home,
+		"REVISA_CASE=send",
+		"REVISA_SETTING=rex",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+		"REVISA_PANES="+strings.Join([]string{
+			"claude  ~/w/linked  feat/x  idle" +
+				"  [personal_sb › tab 1 (here)]",
+			"pi      ~/w/linked  feat/x  idle  [personal_sb › tab 2]",
+		}, "\n"),
+		"REVISA_PICK=1,1",
+		"REVISA_SENT=claude in personal_sb › tab 1 (here)")
+	want := [][]string{
+		{"send", "-s", "session:one", "-b", "block:01ONE",
+			reviewMessage},
+		{"send-key", "-s", "session:one", "-b", "block:01ONE",
+			"enter"},
+	}
+	equalCommands(t, "delivery", want, rexDelivery(t, stub))
+}
+
+func TestBufferRexLeavesOneUnnamedWindowAlone(t *testing.T) {
+	p, home := homeProject(t)
+	linked := p.worktrees[1]
+	writeFile(t, linked, "src/a.lua", "anchor\n")
+	stub := rexStub(t, rexSession{
+		ID: "session:two", Label: "other",
+		Windows: []rexWindow{
+			{ID: "window:OTHER", Label: "Window 33333333"},
+		},
+		Blocks: []rexBlock{
+			{ID: "block:02AGENT", Window: "window:OTHER", Cwd: linked,
+				Harness: "claude", State: "idle"},
+		},
+	})
+	rexCase(t, linked, stub, "session:one",
+		"HOME="+home,
+		"REVISA_CASE=cancel",
+		"REVISA_SETTING=rex",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+		"REVISA_PANES=claude  ~/w/linked  feat/x  idle  [other]",
+		"REVISA_PICK=1,cancel",
+		"REVISA_SENT=claude in other")
+}
+
+func TestBufferRexTellsApartPanes(t *testing.T) {
+	p, home := homeProject(t)
+	linked := p.worktrees[1]
+	writeFile(t, linked, "src/a.lua", "anchor\n")
+	rect := func(x, y, width, height float64) []float64 {
+		return []float64{x, y, width, height}
+	}
+	stub := rexStub(t, rexSession{
+		ID: "session:one", Label: "panes",
+		Windows: []rexWindow{
+			{ID: "window:ONE", Label: "Window 11111111",
+				Panes: []rexPane{
+					{ID: "block:01RIGHT", Rect: rect(0.5, 0, 0.5, 1)},
+					{ID: "block:01LEFT", Rect: rect(0, 0, 0.5, 1)},
+					{ID: "block:01FLOAT", Floating: true,
+						Rect: rect(0.2, 0.2, 0.4, 0.4)},
+				}},
+			{ID: "window:TWO", Label: "Window 22222222",
+				Panes: []rexPane{
+					{ID: "block:01BOTTOM", Rect: rect(0, 0.5, 1, 0.5)},
+					{ID: "block:01TOP", Rect: rect(0, 0, 1, 0.5)},
+				}},
+		},
+		Blocks: []rexBlock{
+			{ID: "block:01RIGHT", Window: "window:ONE", Cwd: linked,
+				Harness: "claude", State: "idle"},
+			{ID: "block:01LEFT", Window: "window:ONE", Cwd: linked,
+				Harness: "claude", State: "idle"},
+			{ID: "block:01FLOAT", Window: "window:ONE", Cwd: linked,
+				Harness: "claude", State: "idle"},
+			{ID: "block:01BOTTOM", Window: "window:TWO", Cwd: linked,
+				Harness: "claude", State: "idle"},
+			{ID: "block:01TOP", Window: "window:TWO", Cwd: linked,
+				Harness: "claude", State: "idle"},
+			{ID: "block:01ME", Window: "window:ONE", Cwd: linked,
+				Harness: "nvim"},
+		},
+	})
+	rexCase(t, linked, stub, "session:one",
+		"HOME="+home,
+		"REVISA_CASE=send",
+		"REVISA_SETTING=rex",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+		"REVISA_PANES="+strings.Join([]string{
+			"claude  ~/w/linked  feat/x  idle" +
+				"  [panes › tab 1 (here) › left]",
+			"claude  ~/w/linked  feat/x  idle" +
+				"  [panes › tab 1 (here) › right]",
+			"claude  ~/w/linked  feat/x  idle" +
+				"  [panes › tab 1 (here) › floating]",
+			"claude  ~/w/linked  feat/x  idle  [panes › tab 2 › top]",
+			"claude  ~/w/linked  feat/x  idle  [panes › tab 2 › bottom]",
+		}, "\n"),
+		"REVISA_PICK=1,1",
+		"REVISA_SENT=claude in panes › tab 1 (here) › left")
+	want := [][]string{
+		{"send", "-s", "session:one", "-b", "block:01LEFT",
+			reviewMessage},
+		{"send-key", "-s", "session:one", "-b", "block:01LEFT",
+			"enter"},
+	}
+	equalCommands(t, "delivery", want, rexDelivery(t, stub))
+}
+
+func TestBufferRexTieOrderPutsThisSessionFirst(t *testing.T) {
+	p, home := homeProject(t)
+	linked := p.worktrees[1]
+	writeFile(t, linked, "src/a.lua", "anchor\n")
+	stub := rexStub(t,
+		rexSession{
+			ID: "session:two", Label: "other",
+			Windows: []rexWindow{
+				{ID: "window:OTHER", Label: "Window 33333333"},
+			},
+			Blocks: []rexBlock{
+				{ID: "block:02AGENT", Window: "window:OTHER",
+					Cwd: linked, Harness: "claude", State: "idle"},
+			},
+		},
+		rexSession{
+			ID: "session:one", Label: "revisa_nvim",
+			Windows: []rexWindow{
+				{ID: "window:ONE", Label: "Window 11111111"},
+			},
+			Blocks: []rexBlock{
+				{ID: "block:01ME", Window: "window:ONE", Cwd: linked,
+					Harness: "nvim"},
+				{ID: "block:01AGENT", Window: "window:ONE",
+					Cwd: linked, Harness: "pi", State: "idle"},
+			},
+		},
+	)
+	rexCase(t, linked, stub, "session:one",
+		"HOME="+home,
+		"REVISA_CASE=send",
+		"REVISA_SETTING=rex",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+		"REVISA_PANES="+strings.Join([]string{
+			"pi      ~/w/linked  feat/x  idle" +
+				"  [revisa_nvim › tab 1 (here)]",
+			"claude  ~/w/linked  feat/x  idle  [other]",
+		}, "\n"),
+		"REVISA_PICK=1,1",
+		"REVISA_SENT=pi in revisa_nvim › tab 1 (here)")
+	want := [][]string{
+		{"send", "-s", "session:one", "-b", "block:01AGENT",
+			reviewMessage},
+		{"send-key", "-s", "session:one", "-b", "block:01AGENT",
+			"enter"},
+	}
+	equalCommands(t, "delivery", want, rexDelivery(t, stub))
 }
 
 func TestBufferRexCancelTypesNothing(t *testing.T) {

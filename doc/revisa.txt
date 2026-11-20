@@ -219,6 +219,24 @@ COMMANDS                                                      *revisa-commands*
     then, under Rex, those in the same Rex session, then the rest. Nothing
     is preselected. Cancelling sends nothing.
 
+    Under Rex, the location names the session, then the window: the label
+    the window was given, or "tab N" for a window nobody named when the
+    session has more than one window or it is Neovim's own window. The
+    window Neovim runs in is marked "(here)", so unnamed tabs read
+    "work › tab 1 (here)" and "work › tab 2", while a session with a
+    single unnamed window that is not Neovim's shows only the session.
+    When two agents share a window, the side of the window they sit in
+    follows: left, right, center, top, bottom or a corner such as
+    top-left, and a floating pane shows as floating. A lone agent in a
+    window goes without. So a window split in two reads
+    "work › tab 1 (here) › left" and "work › tab 1 (here) › right".
+
+    Ties within one rank keep the nearest recipient first: the window
+    Neovim runs in, then the other windows in tab order, and within a
+    window the tiled panes left to right, then top to bottom, then the
+    floating ones. The Rex session Neovim runs in comes before other
+    sessions at the same rank.
+
     Through Rex, the list holds the agents of every Rex session: the panes
     running a recognised agent program. Shells, editors and other panes are
     left out, and so is the pane Neovim runs in. Rex types into the pane,
