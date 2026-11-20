@@ -102,18 +102,12 @@ local function walk(node, floating, found)
 end
 
 -- sites maps every block of a window to where it sits: whether it floats
--- and the rect its layout node gives it. A layer that lists no layout
--- leaves the rect out.
+-- and the rect its layout node gives it. Only the layout tree is read;
+-- whether a block belongs to the window comes from block ls.
 local function sites(layers)
     local found = {}
     for _, layer in ipairs(layers or {}) do
-        local floating = layer.kind == "floating"
-        walk(layer.layout, floating, found)
-        for _, block in ipairs(layer.blocks or {}) do
-            if found[block.block_id] == nil then
-                found[block.block_id] = { floating = floating }
-            end
-        end
+        walk(layer.layout, layer.kind == "floating", found)
     end
     return found
 end
@@ -138,20 +132,15 @@ local function windows(id)
 end
 
 -- ownWindow is the window the plugin runs in: the one block ls puts its
--- block in, or failing that the one window ls lists it in.
-local function ownWindow(agents, listed)
-    local mine = vim.env.REX_BLOCK
-    if mine == nil or mine == "" then
+-- block in.
+local function ownWindow(listedBlocks)
+    local blockID = vim.env.REX_BLOCK
+    if blockID == nil or blockID == "" then
         return nil
     end
-    for _, block in ipairs(agents) do
-        if block.block_id == mine then
+    for _, block in ipairs(listedBlocks) do
+        if block.block_id == blockID then
             return block.window_id
-        end
-    end
-    for _, window in ipairs(listed) do
-        if window.sites[mine] then
-            return window.id
         end
     end
     return nil
@@ -217,19 +206,9 @@ local function place(label, window, here, count)
     return label .. " › " .. name
 end
 
--- bounds is where one recipient sits, empty when its layout says
--- nothing.
-local function bounds(recipient)
-    local site = recipient.site or {}
-    return site.rect or {}
-end
-
--- middle is the centre of one rect, x first then y, nil when the layout
--- gave it no rect.
+-- middle is the centre of one rect, x first then y, nil when the rect
+-- holds no numbers.
 local function middle(rect)
-    if type(rect) ~= "table" then
-        return nil
-    end
     local x, y, width, height = rect[1], rect[2], rect[3], rect[4]
     if type(x) ~= "number" or type(y) ~= "number"
         or type(width) ~= "number" or type(height) ~= "number" then
@@ -359,8 +338,7 @@ end
 -- window the blocks left to right, then top to bottom.
 local function closer(recipients)
     local function key(recipient)
-        local site = recipient.site or {}
-        local rect = bounds(recipient)
+        local rect = (recipient.site or {}).rect or {}
         local window = math.huge
         if recipient.here then
             window = 0
@@ -392,7 +370,6 @@ function M.recipients()
         cli.error(why)
         return nil
     end
-    local here = session()
     local recipients = {}
     for _, entry in ipairs(found) do
         local listed, bad = windows(entry.id)
@@ -400,18 +377,18 @@ function M.recipients()
             cli.error(bad)
             return nil
         end
-        local agents, failed = blocks(entry.id)
-        if not agents then
+        local listedBlocks, failed = blocks(entry.id)
+        if not listedBlocks then
             cli.error(failed)
             return nil
         end
-        local own = ownWindow(agents, listed)
+        local own = ownWindow(listedBlocks)
         local byID = {}
         for _, window in ipairs(listed) do
             byID[window.id] = window
         end
-        local mine = {}
-        for _, block in ipairs(agents) do
+        local sessionRecipients = {}
+        for _, block in ipairs(listedBlocks) do
             if block.creator_name == terminal
                 and block.block_id ~= vim.env.REX_BLOCK then
                 local reports, gone = records(entry.id, block.block_id)
@@ -427,7 +404,7 @@ function M.recipients()
                         return nil
                     end
                     local window = byID[block.window_id]
-                    mine[#mine + 1] = {
+                    sessionRecipients[#sessionRecipients + 1] = {
                         id = block.block_id,
                         session = entry.id,
                         harness = running.harness,
@@ -436,14 +413,14 @@ function M.recipients()
                         window = window,
                         site = window and window.sites[block.block_id],
                         here = window ~= nil and window.id == own,
-                        at = #mine + 1,
+                        at = #sessionRecipients + 1,
                     }
                 end
             end
         end
-        closer(mine)
-        locate(mine, entry.label, #listed)
-        for _, recipient in ipairs(mine) do
+        closer(sessionRecipients)
+        locate(sessionRecipients, entry.label, #listed)
+        for _, recipient in ipairs(sessionRecipients) do
             recipients[#recipients + 1] = recipient
         end
     end

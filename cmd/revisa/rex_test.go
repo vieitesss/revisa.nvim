@@ -722,6 +722,46 @@ func TestBufferRexNumbersFloatingPanes(t *testing.T) {
 	equalCommands(t, "delivery", want, rexDelivery(t, stub))
 }
 
+func TestBufferRexNumbersPanesWithoutALayout(t *testing.T) {
+	p, home := homeProject(t)
+	linked := p.worktrees[1]
+	writeFile(t, linked, "src/a.lua", "anchor\n")
+	stub := rexStub(t, rexSession{
+		ID: "session:one", Label: "hidden",
+		Windows: []rexWindow{
+			{ID: "window:ONE", Label: "Window 11111111"},
+		},
+		Blocks: []rexBlock{
+			{ID: "block:01ME", Window: "window:ONE", Cwd: linked,
+				Harness: "nvim"},
+			{ID: "block:01FIRST", Window: "window:ONE", Cwd: linked,
+				Harness: "claude", State: "idle"},
+			{ID: "block:01SECOND", Window: "window:ONE", Cwd: linked,
+				Harness: "claude", State: "idle"},
+		},
+	})
+	rexCase(t, linked, stub, "session:one",
+		"HOME="+home,
+		"REVISA_CASE=send",
+		"REVISA_SETTING=rex",
+		"REVISA_FILE="+filepath.Join(linked, "src/a.lua"),
+		"REVISA_PANES="+strings.Join([]string{
+			"claude  ~/w/linked  feat/x  idle" +
+				"  [hidden › tab 1 (here) › pane 1]",
+			"claude  ~/w/linked  feat/x  idle" +
+				"  [hidden › tab 1 (here) › pane 2]",
+		}, "\n"),
+		"REVISA_PICK=1,1",
+		"REVISA_SENT=claude in hidden › tab 1 (here) › pane 1")
+	want := [][]string{
+		{"send", "-s", "session:one", "-b", "block:01FIRST",
+			reviewMessage},
+		{"send-key", "-s", "session:one", "-b", "block:01FIRST",
+			"enter"},
+	}
+	equalCommands(t, "delivery", want, rexDelivery(t, stub))
+}
+
 func TestBufferRexNamesPanesAgainstTheWholeWindow(t *testing.T) {
 	p, home := homeProject(t)
 	linked := p.worktrees[1]

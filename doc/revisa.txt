@@ -225,12 +225,12 @@ COMMANDS                                                      *revisa-commands*
     window Neovim runs in is marked "(here)", so unnamed tabs read
     "work › tab 1 (here)" and "work › tab 2", while a session with a
     single unnamed window that is not Neovim's shows only the session.
-    When two or more agents share a window, the side of the window each
-    one sits in follows: the half its centre falls in, left or right,
-    else top or bottom, else both halves when only a corner tells them
-    apart, as in bottom-left, and a floating pane shows as floating. A
-    lone agent in a window goes without. Panes that still share a name
-    are numbered in the order the list shows them, as in pane 1 and
+    When two or more recipients share a window, the side of the window
+    each one sits in follows: the half its centre falls in, left or
+    right, else top or bottom, else both halves when only a corner tells
+    them apart, as in bottom-left, and a floating pane shows as floating.
+    A lone recipient in a window goes without. Panes that still share a
+    name are numbered in the order the list shows them, as in pane 1 and
     pane 2. So a window split in two reads "work › tab 1 (here) › left"
     and "work › tab 1 (here) › right".
 
